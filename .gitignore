@@ -20,10 +20,11 @@ venv/
 .venv/
 env/
 
-# Cached market data — 루트 data/ 디렉토리의 내용물만 제외하고 paper_state.json만 whitelist.
+# Cached market data — 루트 data/ 디렉토리의 내용물만 제외하고 상태 파일만 whitelist.
 # (data/ 자체를 ignore하면 negation 못 함. 또 src/data 같은 코드 디렉토리 보호 위해 루트 앵커)
 /data/*
 !/data/paper_state.json
+!/data/live_state.json
 *.parquet
 *.csv
 

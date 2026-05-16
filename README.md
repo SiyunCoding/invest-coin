@@ -9,7 +9,8 @@ Python + Streamlit 기반 암호화폐 자동거래.
 - ✅ **Phase 2** 전략 확장 (MA cross / RSI), 그리드 서치, 멀티 코인 비교
 - ✅ **Phase 3** 신규 전략 (CRSI / Donchian-ATR / TSMOM / Larry-ATR / 앙상블 / Cycle-Aware) + 5년 multi-regime 검증
 - ✅ **Phase 4** 페이퍼 트레이딩 (BTC 단독, GitHub Actions 자동 실행, 정적 HTML 대시보드)
-- 🔮 **Phase 5** 실거래 실행기 (페이퍼 검증 통과 후)
+- ✅ **Phase 4.5** Binance Testnet 실 매매 — paper와 병행 운영, 실제 거래소 인프라 검증
+- 🔮 **Phase 5** 실거래 (Testnet 통과 + 안전장치 추가 후)
 
 ## 🏆 핵심 발견 — 5년 multi-regime 검증
 
@@ -197,3 +198,76 @@ config/paper_trading.yaml          선택: 커스텀 설정 (없으면 기본값
 - 신호가 백테스트와 일치 (캐시/시간대 버그 없음)
 - 거래가 실제로 체결됨 (signal 변경 시 trade 발생)
 - MDD가 5년 백테스트 평균 범위 내 (cycle_aware: 약 −15% 이내 기대)
+
+---
+
+## Phase 4.5 — Binance Testnet 실 매매
+
+paper와 같은 신호 로직을 쓰지만 **실제 Binance API**로 매매 (가짜 돈). 거래소 규칙
+(LOT_SIZE, MIN_NOTIONAL, 정밀도)이나 부분 체결/거부 같은 실전 버그를 0원 리스크로 검증.
+
+### 차이점 (paper vs testnet)
+
+| | paper | testnet |
+|---|---|---|
+| 잔고 추적 | JSON 파일 (시뮬) | Binance 계정 (실 API) |
+| 호가창 | 백테스트 종가 | 실 호가창 (체결 변동) |
+| API 키 | 불필요 | 필요 (testnet 전용) |
+| 거래소 버그 검증 | ❌ | ✅ |
+
+### Testnet 가입 + 키 발급 (~3분)
+
+1. https://testnet.binance.vision 접속
+2. GitHub 계정으로 로그인
+3. "Generate HMAC_SHA256 Key" 클릭 → **API Key + Secret Key 안전한 곳에 복사**
+4. 가입과 동시에 가짜 USDT ~10000 + 가짜 BTC 등이 자동 지급됨
+
+### GitHub Secrets 등록
+
+1. https://github.com/SiyunCoding/invest-coin/settings/secrets/actions 접속
+2. **New repository secret** 클릭, 2번 반복:
+   - Name: `BINANCE_TESTNET_API_KEY` / Value: 발급받은 API Key
+   - Name: `BINANCE_TESTNET_API_SECRET` / Value: 발급받은 Secret Key
+
+### 로컬 테스트 (선택)
+
+```powershell
+$env:BINANCE_TESTNET_API_KEY = "복사한 키"
+$env:BINANCE_TESTNET_API_SECRET = "복사한 시크릿"
+python -X utf8 scripts/live_tick.py
+# → 첫 실행에서 testnet 잔고 조회 + 신호 계산 + (필요 시) 매매
+```
+
+### 자동 실행
+
+매일 KST 09:35 (paper 5분 뒤)에 GHA가 `live_tick.py` 실행 →
+`data/live_state.json` + `docs/live_dashboard.html` 자동 commit.
+대시보드 우상단 뱃지가 **TESTNET** (초록)으로 표시됨.
+
+### 안전장치 (코드에 이미 포함)
+
+| 보호 | 동작 |
+|---|---|
+| Symbol filter 자동 적용 | LOT_SIZE step / MIN_NOTIONAL / PRICE_FILTER 거래소 규칙 준수 |
+| 잔고 한도 | 사려는 금액이 USDT 잔고 초과 시 가능한 만큼만 매수 |
+| 수량 한도 | 팔려는 양이 BTC 잔고 초과 시 잔고까지만 매도 |
+| 같은 봉 방어 | `last_bar_time` 비교로 같은 봉 두 번 매매 안 함 |
+| 1% 미만 리밸 스킵 | 자산의 1% 미만 변동은 수수료 까임 방지 위해 무시 |
+| 주문 거부 처리 | `BinanceAPIException` 잡아서 에러 trade로 기록 (다음 tick에 재시도) |
+
+### Mainnet으로 전환할 때 (Phase 5)
+
+`config/live_trading.yaml` 생성하고:
+
+```yaml
+testnet: false   # ⚠️ 실거래 활성화
+```
+
+추가 secrets 필요:
+- `BINANCE_API_KEY` / `BINANCE_API_SECRET` (실 계정의 API 키, **출금 권한 ❌**, 거래 권한만)
+
+**Mainnet 전환 전 추가 안전장치 필요** (Phase 5에서 구현):
+- 일일 손실 한도 (예: -5% 도달 시 자동 정지)
+- 포지션 최대 캡 (예: 자본의 50%까지만)
+- 텔레그램 즉시 알림
+- IP 화이트리스트 (GHA는 가변 IP라 VPS 필요할 수 있음)

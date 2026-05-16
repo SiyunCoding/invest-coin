@@ -23,6 +23,20 @@ def _fmt_qty(x: float, decimals: int = 6) -> str:
     return f"{x:,.{decimals}f}".rstrip("0").rstrip(".") or "0"
 
 
+def _mode_badge_class(mode: str) -> str:
+    return {
+        "testnet": "badge-testnet",
+        "mainnet": "badge-mainnet",
+    }.get(mode, "badge-mock")
+
+
+def _mode_badge_label(mode: str) -> str:
+    return {
+        "testnet": "TESTNET",
+        "mainnet": "실거래",
+    }.get(mode, "모의투자")
+
+
 def _utc_to_kst_str(iso: str | None) -> str:
     if not iso:
         return "—"
@@ -66,6 +80,7 @@ def render_dashboard(state: dict, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(_html(
         symbol=symbol,
+        mode=state.get("mode", "paper"),
         last_tick=state.get("last_tick"),
         last_bar_time=state.get("last_bar_time"),
         last_signal=last_signal,
@@ -156,6 +171,8 @@ def _html(**ctx) -> str:
     border-radius: 6px; font-size: 12px; font-weight: 600;
   }}
   .badge-mock {{ background: #283042; color: #8b9ec9; }}
+  .badge-testnet {{ background: #2d4a2d; color: #7fdc7f; }}
+  .badge-mainnet {{ background: #4a2d2d; color: #ec5b5b; }}
   .grid {{
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -188,7 +205,7 @@ def _html(**ctx) -> str:
 <div class="container">
 
 <header>
-  <h1>📊 코인 페이퍼 트레이딩<span class="badge badge-mock">모의투자</span></h1>
+  <h1>📊 코인 자동매매<span class="badge {_mode_badge_class(ctx["mode"])}">{_mode_badge_label(ctx["mode"])}</span></h1>
   <div class="updated">업데이트 {last_tick_kst}</div>
 </header>
 
