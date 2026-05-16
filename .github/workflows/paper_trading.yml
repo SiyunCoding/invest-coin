@@ -1,0 +1,46 @@
+name: Paper Trading Daily Tick
+
+# 매일 UTC 00:30 (= KST 09:30) 에 자동 실행.
+# UTC 00:00 일봉 마감 직후 → fetch_ohlcv가 마감 봉 받아옴.
+# workflow_dispatch로 수동 실행도 가능.
+on:
+  schedule:
+    - cron: '30 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write  # state.json + dashboard.html commit/push 권한
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run paper trading tick
+        run: python -X utf8 scripts/paper_tick.py
+
+      - name: Commit state + dashboard
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/paper_state.json docs/dashboard.html data/BTCUSDT_1d.parquet || true
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "paper tick $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi

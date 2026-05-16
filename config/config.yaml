@@ -1,0 +1,31 @@
+data:
+  exchange: binance
+  cache_dir: data
+  default_symbol: BTCUSDT
+  default_interval: 1d
+  default_lookback_days: 365
+
+backtest:
+  initial_capital: 10000.0
+  fee_rate: 0.001
+  slippage_rate: 0.0005
+
+strategy:
+  default: volatility_breakout
+  volatility_breakout:
+    k: 0.5  # 디폴트. 코인에서는 K가 너무 작으면 신호 과다 → 수수료 부담. 0.7~1.0 검토 권장
+  ma_cross:
+    fast: 20
+    slow: 60
+  rsi:
+    period: 14
+    oversold: 30.0
+    overbought: 70.0
+  crsi:
+    # 코인 walk-forward 검증 결과 (BTC 3y, IS->OOS decay 최저)
+    lower: 20.0
+    trend_period: 150
+  donchian_atr:
+    # 디폴트는 전통적인 20일/3.0배. lookback=80 등은 in-sample over-fit 의심됨
+    lookback: 20
+    atr_mult: 3.0

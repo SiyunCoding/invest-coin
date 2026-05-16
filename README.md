@@ -1,0 +1,199 @@
+# Invest Coin — 바이낸스 자동거래 시스템
+
+Python + Streamlit 기반 암호화폐 자동거래.
+**1단계 백테스팅 → 2단계 모의투자 → 3단계 실거래** 순으로 단계적 확장.
+
+## 현재 진행 단계
+
+- ✅ **Phase 1** 백테스팅 시스템 + Streamlit 대시보드 + 변동성 돌파 전략
+- ✅ **Phase 2** 전략 확장 (MA cross / RSI), 그리드 서치, 멀티 코인 비교
+- ✅ **Phase 3** 신규 전략 (CRSI / Donchian-ATR / TSMOM / Larry-ATR / 앙상블 / Cycle-Aware) + 5년 multi-regime 검증
+- ✅ **Phase 4** 페이퍼 트레이딩 (BTC 단독, GitHub Actions 자동 실행, 정적 HTML 대시보드)
+- 🔮 **Phase 5** 실거래 실행기 (페이퍼 검증 통과 후)
+
+## 🏆 핵심 발견 — 5년 multi-regime 검증
+
+BTC 5년(2021-05 ~ 2026-05)을 3등분해 LUNA/FTX 폭락, 반감기 상승, 횡보장을 각각 평가.
+
+| 전략 | 5년 수익률 | Sharpe | MDD | 3 regime 양수 Sharpe |
+|---|---|---|---|---|
+| Donchian-ATR | +470% | 0.61 | −60% | 3/3 |
+| TSMOM | +107% | 0.64 | −44% | 2/3 |
+| MA cross | +129% | 0.57 | −64% | 2/3 |
+| **🏆 CRSI** | **+63%** | **0.61** | **−23%** | **3/3** ⭐ |
+| Larry-ATR | +74% | 0.47 | −51% | 1/3 |
+| Ensemble | +9% | 0.18 | −48% | 1/3 |
+| RSI | −4% | 0.17 | −66% | 2/3 |
+| 변동성 돌파 | −76% | −0.41 | −82% | 1/3 |
+
+**Connors RSI(CRSI)가 진정한 robust 챔피언**:
+- 폭락장(B&H −52%)에서 **유일하게 양수 수익 +9.82%**, MDD −8.59%
+- 모든 regime에서 **Sharpe > 0.5**, MDD < 11%
+- "절대 수익률"보다 "위험조정 + 자본 보전"에서 압도적
+
+## 설치 & 실행
+
+```powershell
+# (권장) 가상환경
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# 의존성
+pip install -r requirements.txt
+
+# Streamlit 대시보드 실행
+streamlit run src/ui/app.py
+```
+
+브라우저에서 좌측 사이드바로 코인/기간 설정 후 탭 3개에서 운영:
+- 📈 **단일 백테스트**: 전략 선택 + 파라미터 슬라이더 + 가격/매매시점/자산곡선
+- 🔎 **파라미터 최적화**: 그리드 서치 + 2D 히트맵
+- 🌐 **멀티 코인 비교**: 여러 코인에 같은 전략을 동시 적용
+
+## 프로젝트 구조
+
+```
+.
+├── README.md
+├── smoke_test.py               빠른 동작 확인 (8개 전략)
+├── requirements.txt
+├── .env.example                실거래 시 API 키 (백테스트는 불필요)
+├── .gitignore
+│
+├── config/
+│   └── config.yaml             기본 파라미터 (Walk-forward 결과 반영)
+├── data/                       OHLCV 캐시 (gitignore)
+│
+├── scripts/                    분석/검증 스크립트
+│   ├── validate_5y.py          5년 multi-regime walk-forward 검증
+│   └── grid_search.py          그리드 서치 + 50/50 walk-forward
+│
+├── src/
+│   ├── data/binance_data.py    Binance OHLCV fetcher + 캐시 백필
+│   ├── strategies/             전략 모듈 (REGISTRY로 일괄 관리)
+│   │   ├── base.py             Strategy 추상 클래스
+│   │   ├── volatility_breakout.py    Larry Williams 원안
+│   │   ├── ma_cross.py         이동평균 크로스
+│   │   ├── rsi.py              RSI 평균회귀
+│   │   ├── crsi.py             ⭐ Connors RSI (챔피언)
+│   │   ├── donchian_atr.py     Donchian 돌파 + ATR Chandelier (Turtle 현대화)
+│   │   ├── tsmom.py            Vol-Targeted Time-Series Momentum
+│   │   ├── larry_atr.py        Larry 돌파 + ATR Trailing + Vol Sizing
+│   │   └── ensemble.py         가중 앙상블 (분산 효과)
+│   ├── backtest/
+│   │   ├── engine.py           수수료/슬리피지 반영 엔진 (lookahead 방지)
+│   │   ├── metrics.py          수익률 / CAGR / MDD / Sharpe / 승률
+│   │   ├── optimizer.py        그리드 서치
+│   │   └── multi_coin.py       멀티 코인 배치 백테스트
+│   ├── utils/
+│   │   └── indicators.py       공용 지표 (ATR / Wilder RSI / RealizedVol)
+│   └── ui/app.py               Streamlit 대시보드 (3-탭)
+│
+└── tasks/
+    ├── todo.md                 작업 계획
+    └── lessons.md              핵심 교훈 (시행착오 기록)
+```
+
+## 빠른 검증
+
+```powershell
+# 8개 전략 동작 확인 (BTC 1년 데이터로 빠르게)
+python -X utf8 smoke_test.py
+
+# 5년 multi-regime 결정타 검증 (시간 ~3분)
+python -X utf8 scripts/validate_5y.py
+
+# 그리드 서치 + walk-forward (시간 ~5분)
+python -X utf8 scripts/grid_search.py
+```
+
+> 콘솔 한글이 깨질 경우 `python -X utf8`로 실행.
+
+## 등록된 전략 (9개)
+
+| 이름 | 분류 | 특징 |
+|---|---|---|
+| `volatility_breakout` | 단기 추세 | Larry Williams 원안 (K값 돌파) |
+| `ma_cross` | 추세 | 단기/장기 이동평균 크로스 |
+| `rsi` | 평균회귀 | RSI 단순 크로스 |
+| `crsi` ⭐ | 평균회귀 | Connors RSI 3-요소 합성 + 추세 필터 |
+| `donchian_atr` | 추세 추종 | N일 신고가 돌파 + ATR Chandelier trailing |
+| `tsmom` | 추세 + 사이징 | Vol-targeted Time-Series Momentum |
+| `larry_atr` | 하이브리드 | 변동성 돌파 + ATR Trailing + Vol Sizing |
+| `ensemble` | 결합 | 7개 전략 가중 평균 + soft threshold |
+| `cycle_aware` 🏆 | 적응 | ADX regime + SMA200 필터 + BTC 반감기 사이클 + Vol-targeting (Phase 4 디폴트) |
+
+## 새 전략 추가 방법
+
+1. `src/strategies/<my_strategy>.py` 생성, `Strategy` 상속, `generate_signals(ohlcv) -> Series` 구현
+2. `src/strategies/__init__.py`의 `REGISTRY` dict에 `StrategyMeta(cls, label, params=(ParamSpec, ...))` 등록
+3. 끝 — UI 슬라이더는 ParamSpec에서 자동 생성됨
+
+신호 규칙:
+- 인덱스는 OHLCV와 동일, 값은 `[0, 1]` (또는 max_leverage 까지 확장)
+- **lookahead 금지**: i 시점 신호는 i 시점 정보까지만 사용. 엔진이 자동으로 `signal.shift(1)` 적용
+
+## 안전 원칙
+
+- API 키는 `.env`에 (코드/git 커밋 금지, `.gitignore` 포함)
+- 백테스트에 수수료(0.1%) + 슬리피지(0.05%) 반영
+- 실거래 전 반드시 페이퍼 트레이딩으로 갭(데이터 지연 / 슬리피지) 검증
+- 그리드 서치 결과는 항상 walk-forward로 over-fit 확인
+
+## Phase 4 — 페이퍼 트레이딩 (모의투자)
+
+매일 한 번씩 cycle_aware 신호로 가상 매매를 돌리고 결과를 HTML 대시보드로 본다.
+GitHub Actions가 cron으로 자동 실행 → state.json + dashboard.html을 repo에 커밋.
+
+### 로컬 실행
+
+```powershell
+# 한 tick 실행 (현재 신호 → 가상 매매 → 상태 저장 → 대시보드 재생성)
+python -X utf8 scripts/paper_tick.py
+
+# 결과 확인 — 브라우저로 열기
+start docs/dashboard.html
+```
+
+### GitHub Actions 설정
+
+1. **저장소 만들기**: `git init && git remote add origin <your-repo>`
+2. **권한**: 저장소 Settings → Actions → General → "Workflow permissions" → **Read and write**
+3. **첫 push 후**: 매일 UTC 00:30 (KST 09:30)에 자동 실행
+4. **수동 실행**: Actions 탭 → "Paper Trading Daily Tick" → "Run workflow"
+
+### 대시보드 GitHub Pages로 공개 (선택)
+
+저장소 Settings → Pages → Source: `main` 브랜치 `/docs` 폴더 → 저장.
+`https://<your-username>.github.io/<repo>/dashboard.html` 로 접근.
+
+### 구조
+
+```
+src/paper/
+├── portfolio.py    가상 포트폴리오 (cash, qty, avg_cost) + 리밸런싱
+├── state.py        JSON 영속화 (data/paper_state.json)
+├── tick.py         한 tick: fetch→signal→rebalance→save→render
+└── dashboard.py    state → HTML 대시보드
+
+scripts/paper_tick.py              엔트리 포인트
+.github/workflows/paper_trading.yml 매일 자동 실행
+docs/dashboard.html                생성된 대시보드 (GitHub Pages 호스팅용)
+data/paper_state.json              현재 상태 (자동 커밋됨)
+config/paper_trading.yaml          선택: 커스텀 설정 (없으면 기본값)
+```
+
+### 핵심 동작
+
+- **신호 시점**: 어제 UTC 00:00 마감 봉 → cycle_aware 신호 계산 → 오늘 즉시 적용
+- **거래 단위**: 연속 포지션. 신호 0.6이면 자산의 60%를 BTC로 보유
+- **수수료**: 0.1% taker + 0.05% 슬리피지 (Binance 현물 기준)
+- **하이스테리시스**: 자산의 1% 미만 변동은 리밸런싱 스킵 (수수료만 까임)
+- **재실행 안전**: 같은 봉을 두 번 처리해도 거래 중복 없음
+
+### 검증 기준 (Phase 5 진입 전)
+
+1주 이상 안정적으로 돌면서:
+- 신호가 백테스트와 일치 (캐시/시간대 버그 없음)
+- 거래가 실제로 체결됨 (signal 변경 시 trade 발생)
+- MDD가 5년 백테스트 평균 범위 내 (cycle_aware: 약 −15% 이내 기대)
