@@ -12,7 +12,16 @@ import pandas as pd
 import requests
 
 BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
+CRYPTOCOMPARE_URL = "https://min-api.cryptocompare.com/data/v2"
 MAX_LIMIT = 1000
+CC_MAX_LIMIT = 2000
+
+# CryptoCompare fallback (Binance 451 geo-block 시). 같은 일봉/시간봉/분봉만 지원.
+CC_INTERVAL_ENDPOINT = {
+    "1d": "histoday",
+    "1h": "histohour",
+    "1m": "histominute",
+}
 
 INTERVAL_TO_MS = {
     "1m": 60_000,
@@ -71,6 +80,63 @@ def _request_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> l
     return resp.json()
 
 
+def _split_symbol(symbol: str) -> tuple[str, str]:
+    """BTCUSDT → ('BTC', 'USDT'). CryptoCompare용 분리."""
+    for quote in ("USDT", "USDC", "BUSD", "USD", "BTC", "ETH"):
+        if symbol.endswith(quote):
+            return symbol[:-len(quote)], quote
+    raise ValueError(f"Cannot split symbol: {symbol}")
+
+
+def _fetch_cryptocompare(symbol: str, interval: str, start_ms: int, end_ms: int) -> list:
+    """CryptoCompare에서 OHLCV 가져와 Binance kline 포맷으로 변환.
+
+    Binance가 451 geo-block을 던질 때 폴백. 같은 일봉/시간봉/분봉만 지원.
+    반환 형식은 Binance kline list (open_time/o/h/l/c/v/close_time/quote_v/trades/...).
+    """
+    if interval not in CC_INTERVAL_ENDPOINT:
+        raise ValueError(f"CryptoCompare fallback only supports {list(CC_INTERVAL_ENDPOINT)}")
+    fsym, tsym = _split_symbol(symbol)
+    url = f"{CRYPTOCOMPARE_URL}/{CC_INTERVAL_ENDPOINT[interval]}"
+    step_ms = INTERVAL_TO_MS[interval]
+    step_s = step_ms // 1000
+    start_s = start_ms // 1000
+
+    all_data: list = []
+    to_ts = end_ms // 1000
+    while True:
+        params = {"fsym": fsym, "tsym": tsym, "limit": CC_MAX_LIMIT, "toTs": to_ts}
+        resp = requests.get(url, params=params, timeout=15)
+        resp.raise_for_status()
+        body = resp.json()
+        if body.get("Response") != "Success":
+            raise RuntimeError(f"CryptoCompare error: {body.get('Message', body)}")
+        chunk = body["Data"]["Data"]
+        if not chunk:
+            break
+        all_data = chunk + all_data  # CC는 과거→최근 순으로 줌
+        oldest_ts = chunk[0]["time"]
+        if oldest_ts <= start_s:
+            break
+        to_ts = oldest_ts - step_s
+
+    # Binance kline 포맷으로 변환 + 구간 필터
+    klines = []
+    for d in all_data:
+        ot_ms = d["time"] * 1000
+        if ot_ms < start_ms or ot_ms > end_ms:
+            continue
+        klines.append([
+            ot_ms,
+            d["open"], d["high"], d["low"], d["close"], d["volumefrom"],
+            ot_ms + step_ms - 1,  # close_time
+            d["volumeto"],         # quote_volume
+            0, 0, 0,               # trades, taker_buy_base, taker_buy_quote (CC 미제공)
+            "0",                    # ignore
+        ])
+    return klines
+
+
 def fetch_ohlcv(
     symbol: str,
     interval: str = "1d",
@@ -98,8 +164,17 @@ def fetch_ohlcv(
 
     all_rows: list = []
     cursor = start_ms
+    used_fallback = False
     while cursor < end_ms:
-        batch = _request_klines(symbol, interval, cursor, end_ms)
+        try:
+            batch = _request_klines(symbol, interval, cursor, end_ms)
+        except requests.HTTPError as e:
+            # Binance 451 = geo-block (예: GitHub Actions US 러너). CryptoCompare로 폴백.
+            if e.response is not None and e.response.status_code == 451 and not used_fallback:
+                all_rows = _fetch_cryptocompare(symbol, interval, cursor, end_ms)
+                used_fallback = True
+                break
+            raise
         if not batch:
             break
         all_rows.extend(batch)
