@@ -39,7 +39,14 @@ jobs:
           git add data/live_state.json docs/live_dashboard.html || true
           if git diff --staged --quiet; then
             echo "No changes to commit"
-          else
-            git commit -m "live tick $(date -u +%Y-%m-%dT%H:%MZ)"
-            git push
+            exit 0
           fi
+          git commit -m "live tick $(date -u +%Y-%m-%dT%H:%MZ)"
+          # main이 앞서 갔을 수 있으니 rebase + push 재시도 (race condition 대응)
+          for attempt in 1 2 3; do
+            git pull --rebase origin main && git push && exit 0
+            echo "Push attempt $attempt failed, retrying after 5s..."
+            sleep 5
+          done
+          echo "Push failed after 3 attempts"
+          exit 1
