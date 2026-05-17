@@ -1,11 +1,11 @@
 """Live (Binance Testnet/Mainnet) trading tick.
 
-paper_tick.py 와 같은 구조이지만 실 Binance API 사용.
-디폴트는 testnet=True (가짜 돈).
+매일 한 번씩 호출 → cycle_aware 신호 → Binance API 시장가 주문 → state/dashboard/Telegram.
+디폴트는 testnet=True (가짜 돈). config/live_trading.yaml로 mainnet 전환 가능.
 
 실행:
   로컬: $env:BINANCE_TESTNET_API_KEY='xxx' ; python -X utf8 scripts/live_tick.py
-  GHA: .github/workflows/live_trading.yml 에서 secrets로 주입
+  GHA: .github/workflows/live_trading.yml 에서 secrets로 주입 (self-hosted runner)
 """
 from __future__ import annotations
 

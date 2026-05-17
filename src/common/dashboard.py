@@ -38,7 +38,7 @@ def _mode_badge_label(mode: str) -> str:
     return {
         "testnet": "TESTNET",
         "mainnet": "실거래",
-    }.get(mode, "모의투자")
+    }.get(mode, "TESTNET")
 
 
 def _utc_to_kst_str(iso: str | None) -> str:
@@ -151,7 +151,7 @@ def _html(**ctx) -> str:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>코인 페이퍼 트레이딩 대시보드</title>
+<title>코인 자동매매 대시보드</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <style>

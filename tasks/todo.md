@@ -47,16 +47,12 @@
 
 ## ✅ Phase 3.6 — 코드 감사 + High-severity 버그 수정 (완료)
 - [x] **H1**: 캐시 신선도 — 마지막 마감 봉 기준 비교 (불필요한 API 호출 제거)
-- [x] **H2**: `fetch_ohlcv`에서 미마감 봉 자동 drop (페이퍼 트레이딩 안전성)
+- [x] **H2**: `fetch_ohlcv`에서 미마감 봉 자동 drop (실시간 매매 안전성)
 - [x] **H3**: Ensemble threshold soft 매핑 (TSMOM/LarryATR vol-sizing 보존)
 - [x] **H4**: `CycleAwareEnsemble.apply_cycle` 플래그 + ParamSpec "bool" 지원 + UI 체크박스
 - [x] cycle_aware markup multiplier 비대칭 버그 (target_vol에 적용으로 변경)
 
 ## ✅ Phase 4 — Binance Testnet 실 매매 (완료, 운영 중)
-
-> **참고**: 초기에 paper trading (JSON 시뮬레이션)을 Phase 4로 별도 구축했지만,
-> Testnet이 paper의 상위호환(같은 신호 로직 + 실 거래소 검증)이라 paper 폐지하고
-> Testnet으로 통합 (2026-05-18). 코드/워크플로우/dashboard 모두 정리.
 
 ### 구축한 것
 - [x] src/live/client.py — testnet/mainnet 토글 Binance Client 팩토리

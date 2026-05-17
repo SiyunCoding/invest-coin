@@ -27,7 +27,7 @@ from .executor import (
 
 
 def _init_live_state(config: dict, started_at: str, initial: float) -> dict:
-    """페이퍼와 같은 스키마 — 대시보드 재사용 가능. testnet 플래그만 추가."""
+    """state.json 초기 스키마. dashboard 모듈이 이 구조를 그대로 렌더링."""
     return {
         "config": {**config, "initial_capital": initial},
         "cash": initial,  # 다음 tick에서 Binance 조회로 갱신됨

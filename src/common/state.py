@@ -1,6 +1,6 @@
 """트레이딩 상태 영속화 (JSON).
 
-live tick에서 매 tick마다 호출. paper 모듈 폐지로 paper/ → common/ 이전됨.
+live tick에서 매 사이클마다 호출. cash/qty/거래내역/히스토리를 dict로 보관.
 """
 from __future__ import annotations
 

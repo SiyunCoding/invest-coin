@@ -1,6 +1,6 @@
 name: Live Trading (Testnet) Daily Tick
 
-# 매일 UTC 00:35 (= KST 09:35). paper_trading.yml 5분 뒤.
+# 매일 UTC 00:35 (= KST 09:35). 어제 마감 봉 기준으로 cycle_aware 신호 계산.
 # Binance가 GHA 호스팅 러너 IP를 차단해서 self-hosted runner (Oracle Cloud 춘천) 사용.
 # Runner: invest-coin-runner @ Oracle Cloud ap-chuncheon-1
 on:

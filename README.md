@@ -1,7 +1,7 @@
 # Invest Coin — 바이낸스 자동거래 시스템
 
 Python + Streamlit 기반 암호화폐 자동거래.
-**1단계 백테스팅 → 2단계 모의투자 → 3단계 실거래** 순으로 단계적 확장.
+**1단계 백테스팅 → 2단계 Testnet (가짜 돈, 진짜 API) → 3단계 실거래** 순으로 단계적 확장.
 
 ## 현재 진행 단계
 
@@ -137,7 +137,7 @@ python -X utf8 scripts/grid_search.py
 
 - API 키는 `.env`에 (코드/git 커밋 금지, `.gitignore` 포함)
 - 백테스트에 수수료(0.1%) + 슬리피지(0.05%) 반영
-- 실거래 전 반드시 페이퍼 트레이딩으로 갭(데이터 지연 / 슬리피지) 검증
+- 실거래 전 반드시 Testnet으로 갭(데이터 지연 / 슬리피지 / 거래소 규칙) 검증
 - 그리드 서치 결과는 항상 walk-forward로 over-fit 확인
 
 ## Phase 4 — Binance Testnet 실 매매 (가짜 돈, 진짜 API)
