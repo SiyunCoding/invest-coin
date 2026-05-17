@@ -57,49 +57,69 @@ def _kst_str(dt: Optional[datetime] = None) -> str:
 
 
 def format_tick_notification(mode: str, result: dict) -> str:
-    """Tick 결과 dict → Telegram Markdown 메시지.
+    """Tick 결과 dict → 한국어 Telegram Markdown 메시지.
+
+    원칙:
+      - 매매 발생: 체결 정보 + 잔고 현황 풍부하게
+      - 변함없음: "변함없음" 한 줄
+      - 에러: 코드/메시지
 
     result 필수 키: signal, price, equity, cash, base_qty, trade (None 가능), duplicate_bar.
     """
-    mode_emoji = {"paper": "🔵", "testnet": "🟢", "mainnet": "🔴"}.get(mode, "🔵")
-    mode_label = {"paper": "Paper", "testnet": "Testnet", "mainnet": "MAINNET"}.get(mode, "Paper")
+    mode_label = {
+        "paper": "📊 모의투자",
+        "testnet": "📊 실투자 (테스트넷)",
+        "mainnet": "🔥 실거래",
+    }.get(mode, "📊 모의투자")
 
-    signal = float(result.get("signal", 0.0))
-    price = float(result.get("price", 0.0))
-    equity = float(result.get("equity", 0.0))
-    cash = float(result.get("cash", equity))
-    qty = float(result.get("base_qty", 0.0))
-
-    lines = [
-        f"{mode_emoji} *{mode_label} Tick* — {_kst_str()}",
-        "",
-        f"Signal: `{signal:.3f}`",
-        f"Equity: `${equity:,.2f}`",
-        f"Cash: `${cash:,.2f}`",
-        f"BTC: `{qty:.6f}` × `${price:,.2f}`",
-        "",
-    ]
-
+    header = f"{mode_label} · {_kst_str()}"
     trade = result.get("trade")
+
+    # CASE 1: 변함없음 (거래 없음)
     if trade is None:
         if result.get("duplicate_bar"):
-            lines.append("🔁 Same bar as last tick — no action")
-        else:
-            lines.append("📝 No trade today")
-    elif trade.get("side") == "error":
-        lines.append(f"⚠️ ORDER ERROR")
-        if "error_code" in trade:
-            lines.append(f"Code: `{trade['error_code']}`")
-        if "error_message" in trade:
-            lines.append(f"Message: `{trade['error_message']}`")
-    else:
-        side = trade.get("side", "?").upper()
-        side_emoji = "🚀" if side == "BUY" else "💰"
-        t_qty = float(trade.get("qty", 0))
-        t_price = float(trade.get("price", 0))
-        t_value = float(trade.get("value", 0))
-        t_fee = float(trade.get("fee", 0))
-        lines.append(f"{side_emoji} *{side}* `{t_qty:.6f} BTC` @ `${t_price:,.2f}`")
-        lines.append(f"Value: `${t_value:,.2f}` · Fee: `{t_fee:.6f} {trade.get('fee_asset', 'USDT')}`")
+            return f"{header}\n변함없음 (같은 봉)"
+        return f"{header}\n변함없음"
 
+    # CASE 2: 주문 오류
+    if trade.get("side") == "error":
+        lines = [header, "", "⚠️ *주문 오류*"]
+        if "error_code" in trade:
+            lines.append(f"• 에러 코드: `{trade['error_code']}`")
+        if "error_message" in trade:
+            lines.append(f"• 메시지: `{trade['error_message']}`")
+        return "\n".join(lines)
+
+    # CASE 3: 매수/매도 체결
+    side = trade.get("side", "").upper()
+    side_emoji = "🚀" if side == "BUY" else "💰"
+    side_label = "매수" if side == "BUY" else "매도"
+    symbol = trade.get("symbol", "BTCUSDT")
+    t_qty = float(trade.get("qty", 0))
+    t_price = float(trade.get("price", 0))
+    t_value = float(trade.get("value", 0))
+    t_fee = float(trade.get("fee", 0))
+    fee_asset = trade.get("fee_asset", "USDT")
+
+    equity = float(result.get("equity", 0))
+    cash = float(result.get("cash", 0))
+    base_qty = float(result.get("base_qty", 0))
+    current_price = float(result.get("price", t_price))
+    position_value = base_qty * current_price
+
+    lines = [
+        header,
+        "",
+        f"{side_emoji} *{side_label} 체결*",
+        f"• 종목: `{symbol}`",
+        f"• 수량: `{t_qty:.6f} BTC`",
+        f"• 체결가: `${t_price:,.2f}`",
+        f"• 체결금액: `${t_value:,.2f}`",
+        f"• 수수료: `{t_fee:.6f} {fee_asset}`",
+        "",
+        "💼 *잔고 현황*",
+        f"• 총자산: `${equity:,.2f}`",
+        f"• 평가금액: `${position_value:,.2f}` (BTC {base_qty:.6f})",
+        f"• 예수금: `${cash:,.2f}`",
+    ]
     return "\n".join(lines)
