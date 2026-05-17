@@ -1,0 +1,49 @@
+name: Live Executor Test (Testnet, 수동 트리거)
+
+# scripts/test_live_executor.py 를 실 Binance Testnet에 대해 실행.
+# 6개 시나리오 (매수 / 추가매수 / 부분매도 / 전량매도 / 중복스킵 / hysteresis스킵)
+# 결과를 tasks/executor_test_results.md 에 markdown으로 commit.
+#
+# 수동 트리거 전용 (cron 없음). Actions 탭 → "Live Executor Test" → Run workflow.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          python3.11 -m pip install --user --upgrade pip
+          python3.11 -m pip install --user -r requirements.txt
+
+      - name: Run executor tests
+        env:
+          BINANCE_TESTNET_API_KEY: ${{ secrets.BINANCE_TESTNET_API_KEY }}
+          BINANCE_TESTNET_API_SECRET: ${{ secrets.BINANCE_TESTNET_API_SECRET }}
+        run: python3.11 -X utf8 scripts/test_live_executor.py
+
+      - name: Commit test results
+        if: always()  # 테스트 실패해도 결과는 commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tasks/executor_test_results.md || true
+          if git diff --staged --quiet; then
+            echo "No results to commit"
+            exit 0
+          fi
+          git commit -m "executor test results $(date -u +%Y-%m-%dT%H:%MZ)"
+          for attempt in 1 2 3; do
+            git pull --rebase origin main && git push && exit 0
+            echo "Push attempt $attempt failed, retrying..."
+            sleep 5
+          done
+          exit 1
