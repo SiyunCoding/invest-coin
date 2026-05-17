@@ -8,8 +8,7 @@ Python + Streamlit 기반 암호화폐 자동거래.
 - ✅ **Phase 1** 백테스팅 시스템 + Streamlit 대시보드 + 변동성 돌파 전략
 - ✅ **Phase 2** 전략 확장 (MA cross / RSI), 그리드 서치, 멀티 코인 비교
 - ✅ **Phase 3** 신규 전략 (CRSI / Donchian-ATR / TSMOM / Larry-ATR / 앙상블 / Cycle-Aware) + 5년 multi-regime 검증
-- ✅ **Phase 4** 페이퍼 트레이딩 (BTC 단독, GitHub Actions 자동 실행, 정적 HTML 대시보드)
-- ✅ **Phase 4.5** Binance Testnet 실 매매 — paper와 병행 운영, 실제 거래소 인프라 검증
+- ✅ **Phase 4** Binance Testnet 실 매매 (Oracle Cloud self-hosted runner, 매일 자동 cron, Telegram 알림)
 - 🔮 **Phase 5** 실거래 (Testnet 통과 + 안전장치 추가 후)
 
 ## 🏆 핵심 발견 — 5년 multi-regime 검증
@@ -141,79 +140,40 @@ python -X utf8 scripts/grid_search.py
 - 실거래 전 반드시 페이퍼 트레이딩으로 갭(데이터 지연 / 슬리피지) 검증
 - 그리드 서치 결과는 항상 walk-forward로 over-fit 확인
 
-## Phase 4 — 페이퍼 트레이딩 (모의투자)
+## Phase 4 — Binance Testnet 실 매매 (가짜 돈, 진짜 API)
 
-매일 한 번씩 cycle_aware 신호로 가상 매매를 돌리고 결과를 HTML 대시보드로 본다.
-GitHub Actions가 cron으로 자동 실행 → state.json + dashboard.html을 repo에 커밋.
+매일 한 번씩 cycle_aware 신호로 **실제 Binance Testnet API**에 주문 → 결과를
+state.json + HTML 대시보드 + Telegram 알림으로 저장. 거래소 규칙(LOT_SIZE,
+MIN_NOTIONAL, 정밀도), 부분 체결, 주문 거부 같은 실전 버그를 0원 리스크로 검증.
 
-### 로컬 실행
+### 핵심 동작
 
-```powershell
-# 한 tick 실행 (현재 신호 → 가상 매매 → 상태 저장 → 대시보드 재생성)
-python -X utf8 scripts/paper_tick.py
-
-# 결과 확인 — 브라우저로 열기
-start docs/dashboard.html
-```
-
-### GitHub Actions 설정
-
-1. **저장소 만들기**: `git init && git remote add origin <your-repo>`
-2. **권한**: 저장소 Settings → Actions → General → "Workflow permissions" → **Read and write**
-3. **첫 push 후**: 매일 UTC 00:30 (KST 09:30)에 자동 실행
-4. **수동 실행**: Actions 탭 → "Paper Trading Daily Tick" → "Run workflow"
-
-### 대시보드 GitHub Pages로 공개 (선택)
-
-저장소 Settings → Pages → Source: `main` 브랜치 `/docs` 폴더 → 저장.
-`https://<your-username>.github.io/<repo>/dashboard.html` 로 접근.
+- **신호 시점**: 어제 UTC 00:00 마감 봉 → cycle_aware 신호 계산 → 즉시 시장가 주문
+- **거래 단위**: 연속 포지션. 신호 0.6이면 자산의 60%를 BTC로 보유
+- **잔고 추적**: Binance 계정이 source-of-truth (매 tick 잔고 재조회)
+- **하이스테리시스**: 자산의 1% 미만 변동은 리밸런싱 스킵 (수수료만 까임)
+- **재실행 안전**: 같은 봉(`last_bar_time`)을 두 번 처리해도 거래 중복 없음
 
 ### 구조
 
 ```
-src/paper/
-├── portfolio.py    가상 포트폴리오 (cash, qty, avg_cost) + 리밸런싱
-├── state.py        JSON 영속화 (data/paper_state.json)
-├── tick.py         한 tick: fetch→signal→rebalance→save→render
-└── dashboard.py    state → HTML 대시보드
+src/live/
+├── client.py         testnet/mainnet 토글 Binance Client
+├── executor.py       rebalance + LOT_SIZE/MIN_NOTIONAL/PRICE_FILTER 자동 적용
+└── tick.py           fetch→signal→Binance 주문→state/dashboard
 
-scripts/paper_tick.py              엔트리 포인트
-.github/workflows/paper_trading.yml 매일 자동 실행
-docs/dashboard.html                생성된 대시보드 (GitHub Pages 호스팅용)
-data/paper_state.json              현재 상태 (자동 커밋됨)
-config/paper_trading.yaml          선택: 커스텀 설정 (없으면 기본값)
+src/common/           live tick이 쓰는 공유 유틸
+├── state.py          JSON 영속화 (data/live_state.json)
+└── dashboard.py      state → HTML
+
+src/notifier/         Telegram 알림
+└── telegram.py       매 tick 결과 한국어 메시지 (변함없음 / 매수·매도 체결 / 오류)
+
+scripts/live_tick.py              엔트리 포인트
+.github/workflows/live_trading.yml 매일 UTC 00:35 (KST 09:35) self-hosted runner
+docs/live_dashboard.html          생성된 대시보드 (TESTNET 뱃지 초록)
+data/live_state.json              현재 상태 (자동 커밋됨)
 ```
-
-### 핵심 동작
-
-- **신호 시점**: 어제 UTC 00:00 마감 봉 → cycle_aware 신호 계산 → 오늘 즉시 적용
-- **거래 단위**: 연속 포지션. 신호 0.6이면 자산의 60%를 BTC로 보유
-- **수수료**: 0.1% taker + 0.05% 슬리피지 (Binance 현물 기준)
-- **하이스테리시스**: 자산의 1% 미만 변동은 리밸런싱 스킵 (수수료만 까임)
-- **재실행 안전**: 같은 봉을 두 번 처리해도 거래 중복 없음
-
-### 검증 기준 (Phase 5 진입 전)
-
-1주 이상 안정적으로 돌면서:
-- 신호가 백테스트와 일치 (캐시/시간대 버그 없음)
-- 거래가 실제로 체결됨 (signal 변경 시 trade 발생)
-- MDD가 5년 백테스트 평균 범위 내 (cycle_aware: 약 −15% 이내 기대)
-
----
-
-## Phase 4.5 — Binance Testnet 실 매매
-
-paper와 같은 신호 로직을 쓰지만 **실제 Binance API**로 매매 (가짜 돈). 거래소 규칙
-(LOT_SIZE, MIN_NOTIONAL, 정밀도)이나 부분 체결/거부 같은 실전 버그를 0원 리스크로 검증.
-
-### 차이점 (paper vs testnet)
-
-| | paper | testnet |
-|---|---|---|
-| 잔고 추적 | JSON 파일 (시뮬) | Binance 계정 (실 API) |
-| 호가창 | 백테스트 종가 | 실 호가창 (체결 변동) |
-| API 키 | 불필요 | 필요 (testnet 전용) |
-| 거래소 버그 검증 | ❌ | ✅ |
 
 ### Testnet 가입 + 키 발급 (~3분)
 

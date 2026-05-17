@@ -1,10 +1,9 @@
 """Binance Testnet/Mainnet 실 매매 모듈.
 
-paper/ 와 동일한 신호 로직을 사용하지만:
-  - 실제 Binance API 호출 (testnet 또는 mainnet)
-  - source-of-truth = Binance 계정 (JSON은 거래 로그 + 히스토리만 보관)
-  - LOT_SIZE / PRICE_FILTER / MIN_NOTIONAL 등 거래소 규칙 자동 적용
-  - 부분 체결 / 주문 거부 / 레이트리밋 처리
+- 실제 Binance API 호출 (testnet 또는 mainnet)
+- source-of-truth = Binance 계정 (JSON은 거래 로그 + 히스토리만 보관)
+- LOT_SIZE / PRICE_FILTER / MIN_NOTIONAL 등 거래소 규칙 자동 적용
+- 부분 체결 / 주문 거부 / 레이트리밋 처리
 
 환경 변수:
   - BINANCE_TESTNET_API_KEY / BINANCE_TESTNET_API_SECRET (testnet=True 시)

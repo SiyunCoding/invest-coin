@@ -52,33 +52,11 @@
 - [x] **H4**: `CycleAwareEnsemble.apply_cycle` 플래그 + ParamSpec "bool" 지원 + UI 체크박스
 - [x] cycle_aware markup multiplier 비대칭 버그 (target_vol에 적용으로 변경)
 
-## ✅ Phase 4 — 페이퍼 트레이딩 (완료, 운영 중)
+## ✅ Phase 4 — Binance Testnet 실 매매 (완료, 운영 중)
 
-### 구축한 것
-- [x] src/paper/portfolio.py — 가상 포트폴리오 + 리밸런싱 (연속 포지션, 수수료/슬리피지)
-- [x] src/paper/state.py — JSON 영속화 (data/paper_state.json)
-- [x] src/paper/tick.py — fetch→signal→rebalance→save→render 한 사이클
-- [x] src/paper/dashboard.py — state → HTML (다크 테마, Chart.js)
-- [x] scripts/paper_tick.py — 엔트리 포인트 (로컬/GHA 공용)
-- [x] .github/workflows/paper_trading.yml — 매일 UTC 00:30 cron
-- [x] 같은 봉 재처리 방어 (last_bar_time 비교)
-- [x] 자산 1% 미만 변동은 리밸런싱 스킵 (하이스테리시스)
-
-### 운영 원칙
-1. 전략 = **cycle_aware** (BTC 5년 검증 챔피언, Sharpe 0.76, min Sharpe 0.94)
-2. 초기 가상자본 $100,000
-3. 매일 UTC 00:30 자동 실행 (어제 마감 봉 기준 신호)
-4. 거래 발생 시 자동 commit + GitHub Pages로 즉시 확인 가능
-5. 최소 1~2주 운영 후 페이퍼 vs 백테스트 일치성 확인
-
-### 성공 기준 (Phase 5 진입 조건)
-- [ ] 7일 연속 자동 실행 무중단
-- [ ] cycle_aware 신호가 매일 일관성 있게 계산됨
-- [ ] 신호 변경 시 거래 실제 체결 (signal 0→0.5 같은 케이스)
-- [ ] MDD가 백테스트 평균 범위 내 (cycle_aware: −15% 이내 기대)
-- [ ] state.json + dashboard.html 자동 commit 정상
-
-## ✅ Phase 4.5 — Binance Testnet 실 매매 (완료, 운영 중)
+> **참고**: 초기에 paper trading (JSON 시뮬레이션)을 Phase 4로 별도 구축했지만,
+> Testnet이 paper의 상위호환(같은 신호 로직 + 실 거래소 검증)이라 paper 폐지하고
+> Testnet으로 통합 (2026-05-18). 코드/워크플로우/dashboard 모두 정리.
 
 ### 구축한 것
 - [x] src/live/client.py — testnet/mainnet 토글 Binance Client 팩토리

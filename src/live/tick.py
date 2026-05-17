@@ -1,11 +1,10 @@
 """한 번의 Live (testnet/mainnet) trading tick.
 
-paper.tick 과 같은 구조이지만:
-  - 가격 데이터: 그대로 load_ohlcv (Binance 또는 CC 폴백)
-  - 신호 계산: 동일
-  - 매매 실행: Binance API 호출 (paper는 JSON 시뮬레이션이었음)
-  - 잔고 / 가격: 매 tick마다 Binance에서 조회 (source of truth)
-  - 거래 로그 + history: state.json에 저장 (대시보드용)
+- 가격 데이터: load_ohlcv (Binance 직접; testnet 모드에서도 캔들 조회는 mainnet 공개 API 사용)
+- 신호 계산: cycle_aware 등 등록된 전략 그대로
+- 매매 실행: Binance API 시장가 주문
+- 잔고 / 가격: 매 tick마다 Binance에서 조회 (source of truth)
+- 거래 로그 + history: state.json에 저장 (대시보드 + 텔레그램 알림용)
 """
 from __future__ import annotations
 
@@ -14,10 +13,9 @@ from pathlib import Path
 
 from binance.exceptions import BinanceAPIException
 
+from ..common import load_state, render_dashboard, save_state
 from ..data import load_ohlcv
 from ..notifier import format_tick_notification, send_telegram_message
-from ..paper.dashboard import render_dashboard
-from ..paper.state import load_state, save_state
 from ..strategies import REGISTRY
 from .client import get_client
 from .executor import (

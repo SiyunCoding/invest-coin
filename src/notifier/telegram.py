@@ -67,10 +67,9 @@ def format_tick_notification(mode: str, result: dict) -> str:
     result 필수 키: signal, price, equity, cash, base_qty, trade (None 가능), duplicate_bar.
     """
     mode_label = {
-        "paper": "📊 모의투자",
         "testnet": "📊 실투자 (테스트넷)",
         "mainnet": "🔥 실거래",
-    }.get(mode, "📊 모의투자")
+    }.get(mode, "📊 실투자 (테스트넷)")
 
     header = f"{mode_label} · {_kst_str()}"
     trade = result.get("trade")

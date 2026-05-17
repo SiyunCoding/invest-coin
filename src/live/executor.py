@@ -5,7 +5,7 @@
   - target_weight ∈ [0, 1] → 목표 BTC 가치 → 주문 수량 계산
   - LOT_SIZE step, MIN_NOTIONAL, PRICE_FILTER 등 거래소 규칙 자동 적용
   - 시장가 매수/매도 (quoteOrderQty for buy, quantity for sell)
-  - 체결 결과 정규화 (paper.portfolio 와 같은 trade dict 형식)
+  - 체결 결과 정규화 (trade dict 형식)
 
 주의:
   - Source of truth = Binance 잔고. 우리 state.json은 히스토리만 저장.

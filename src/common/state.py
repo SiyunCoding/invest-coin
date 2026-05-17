@@ -1,6 +1,6 @@
-"""페이퍼/라이브 트레이딩 상태 영속화 (JSON).
+"""트레이딩 상태 영속화 (JSON).
 
-src/live/tick.py 도 이 모듈을 공유. 'paper' 디렉토리에 있지만 paper 전용은 아님.
+live tick에서 매 tick마다 호출. paper 모듈 폐지로 paper/ → common/ 이전됨.
 """
 from __future__ import annotations
 
