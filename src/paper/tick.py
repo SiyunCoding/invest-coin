@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..data import load_ohlcv
+from ..notifier import format_tick_notification, send_telegram_message
 from ..strategies import REGISTRY
 from .dashboard import render_dashboard
 from .portfolio import Portfolio
@@ -96,11 +97,15 @@ def run_tick(
     save_state(state_path, state)
     render_dashboard(state, dashboard_path)
 
-    return {
+    result = {
         "trade": trade,
         "signal": latest_signal,
         "price": latest_price,
         "equity": equity,
+        "cash": portfolio.cash,
+        "base_qty": portfolio.qty,
         "bar_time": latest_bar_time,
         "duplicate_bar": already_processed,
     }
+    send_telegram_message(format_tick_notification("paper", result))
+    return result

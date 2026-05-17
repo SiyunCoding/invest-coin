@@ -15,6 +15,7 @@ from pathlib import Path
 from binance.exceptions import BinanceAPIException
 
 from ..data import load_ohlcv
+from ..notifier import format_tick_notification, send_telegram_message
 from ..paper.dashboard import render_dashboard
 from ..paper.state import load_state, save_state
 from ..strategies import REGISTRY
@@ -156,7 +157,8 @@ def run_live_tick(
     save_state(state_path, state)
     render_dashboard(state, dashboard_path)
 
-    return {
+    mode = "testnet" if testnet else "mainnet"
+    result = {
         "trade": trade,
         "signal": latest_signal,
         "price": current_price,
@@ -165,5 +167,7 @@ def run_live_tick(
         "base_qty": base_qty,
         "bar_time": latest_bar_time,
         "duplicate_bar": already_processed,
-        "mode": "testnet" if testnet else "mainnet",
+        "mode": mode,
     }
+    send_telegram_message(format_tick_notification(mode, result))
+    return result
