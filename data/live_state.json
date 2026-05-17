@@ -1,0 +1,52 @@
+{
+  "config": {
+    "symbol": "BTCUSDT",
+    "interval": "1d",
+    "strategy": "cycle_aware",
+    "strategy_params": {},
+    "testnet": true,
+    "fee_rate": 0.001,
+    "slippage_rate": 0.0005,
+    "lookback_days": 730,
+    "initial_capital": 88047.9
+  },
+  "cash": 88041.44,
+  "position": {
+    "qty": 0.0,
+    "avg_cost": 0.0
+  },
+  "trades": [
+    {
+      "time": "2026-05-17T17:45:38.735000+00:00",
+      "side": "sell",
+      "qty": 1.0,
+      "price": 78041.44,
+      "value": 78041.44,
+      "fee": 0.0,
+      "fee_asset": "USDT",
+      "order_id": 4417991,
+      "status": "FILLED",
+      "symbol": "BTCUSDT",
+      "signal": 0.0,
+      "bar_time": "2026-05-16T00:00:00+00:00"
+    }
+  ],
+  "history": [
+    {
+      "time": "2026-05-17T17:45:37.624321+00:00",
+      "bar_time": "2026-05-16T00:00:00+00:00",
+      "price": 78041.44,
+      "signal": 0.0,
+      "position_value": 0.0,
+      "cash": 88041.44,
+      "equity": 88041.44
+    }
+  ],
+  "peak_equity": 88047.9,
+  "started_at": "2026-05-17T17:45:37.624321+00:00",
+  "last_tick": "2026-05-17T17:45:37.624321+00:00",
+  "last_price": 78041.44,
+  "last_signal": 0.0,
+  "last_bar_time": "2026-05-16T00:00:00+00:00",
+  "mode": "testnet"
+}
