@@ -1,7 +1,8 @@
 name: Live Trading (Testnet) Daily Tick
 
 # 매일 UTC 00:35 (= KST 09:35). paper_trading.yml 5분 뒤.
-# 봉 마감 직후 → cycle_aware 신호 → Binance Testnet 매매 → 결과 commit.
+# Binance가 GHA 호스팅 러너 IP를 차단해서 self-hosted runner (Oracle Cloud 춘천) 사용.
+# Runner: invest-coin-runner @ Oracle Cloud ap-chuncheon-1
 on:
   schedule:
     - cron: '35 0 * * *'
@@ -12,28 +13,22 @@ permissions:
 
 jobs:
   tick:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python3.11 -m pip install --user --upgrade pip
+          python3.11 -m pip install --user -r requirements.txt
 
       - name: Run live trading tick
         env:
           BINANCE_TESTNET_API_KEY: ${{ secrets.BINANCE_TESTNET_API_KEY }}
           BINANCE_TESTNET_API_SECRET: ${{ secrets.BINANCE_TESTNET_API_SECRET }}
-        run: python -X utf8 scripts/live_tick.py
+        run: python3.11 -X utf8 scripts/live_tick.py
 
       - name: Commit state + dashboard
         run: |
