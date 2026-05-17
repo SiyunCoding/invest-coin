@@ -1,7 +1,14 @@
-"""페이퍼 트레이딩 상태 → HTML 대시보드.
+"""페이퍼/라이브 트레이딩 상태 → HTML 대시보드.
 
 다크 테마, 카드 + 표 + Chart.js 파이/라인.
-GitHub Pages에서 그대로 호스팅 가능 (docs/dashboard.html).
+GitHub Pages에서 그대로 호스팅 가능 (docs/dashboard.html, docs/live_dashboard.html).
+
+state.mode 값에 따라 우상단 뱃지 자동 변경:
+  - "paper" (또는 None) → 모의투자 (회색)
+  - "testnet" → TESTNET (초록)
+  - "mainnet" → 실거래 (빨강)
+
+src/live/tick.py 도 이 모듈을 공유. 'paper' 디렉토리에 있지만 paper 전용은 아님.
 """
 from __future__ import annotations
 

@@ -238,10 +238,40 @@ python -X utf8 scripts/live_tick.py
 # → 첫 실행에서 testnet 잔고 조회 + 신호 계산 + (필요 시) 매매
 ```
 
-### 자동 실행
+### 자동 실행 — Oracle Cloud self-hosted runner 필수
 
-매일 KST 09:35 (paper 5분 뒤)에 GHA가 `live_tick.py` 실행 →
-`data/live_state.json` + `docs/live_dashboard.html` 자동 commit.
+⚠️ **Binance는 GitHub Actions hosted runner (US 데이터센터 IP)를 차단** (testnet/mainnet 모두 451 에러).
+실거래 자동화는 **한국/아시아 region 서버에 self-hosted runner**가 필수.
+
+**권장 인프라: Oracle Cloud Always Free**
+- 평생 무료, `ap-chuncheon-1` (춘천) region에서 한국 IP 사용 가능
+- Shape: `VM.Standard.E2.1.Micro` (AMD x86, Ubuntu 22.04)
+- 또는 ARM `VM.Standard.A1.Flex` (1 OCPU + 6GB RAM 무료 한도)
+
+**설정 순서**:
+
+1. Oracle Cloud 가입 → 인스턴스 생성 → Public IP 할당 → SSH 접속
+2. 서버에 Python 3.11 설치:
+   ```bash
+   sudo apt update -qq && \
+   sudo apt install -y -qq software-properties-common curl git && \
+   sudo add-apt-repository -y ppa:deadsnakes/ppa && \
+   sudo apt install -y -qq python3.11 python3.11-venv python3.11-distutils && \
+   curl -sS https://bootstrap.pypa.io/get-pip.py | sudo python3.11
+   ```
+3. GHA self-hosted runner 등록 (token은 repo Settings → Actions → Runners):
+   ```bash
+   mkdir -p ~/actions-runner && cd ~/actions-runner
+   curl -L -o actions-runner.tar.gz "https://github.com/actions/runner/releases/download/v<latest>/actions-runner-linux-x64-<latest>.tar.gz"
+   tar xzf actions-runner.tar.gz
+   sudo ./bin/installdependencies.sh
+   ./config.sh --url https://github.com/<USER>/<REPO> --token <TOKEN> \
+       --name invest-coin-runner --labels self-hosted,linux,x64 --unattended
+   sudo ./svc.sh install ubuntu && sudo ./svc.sh start
+   ```
+4. 워크플로우는 이미 `runs-on: [self-hosted, linux, x64]` 로 설정됨
+
+매일 KST 09:35 자동 실행 → state.json + dashboard.html 자동 commit.
 대시보드 우상단 뱃지가 **TESTNET** (초록)으로 표시됨.
 
 ### 안전장치 (코드에 이미 포함)
@@ -270,4 +300,4 @@ testnet: false   # ⚠️ 실거래 활성화
 - 일일 손실 한도 (예: -5% 도달 시 자동 정지)
 - 포지션 최대 캡 (예: 자본의 50%까지만)
 - 텔레그램 즉시 알림
-- IP 화이트리스트 (GHA는 가변 IP라 VPS 필요할 수 있음)
+- IP 화이트리스트: Oracle Cloud 인스턴스의 public IP 고정 후 Binance API key에서 화이트리스트 등록

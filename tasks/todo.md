@@ -78,6 +78,38 @@
 - [ ] MDD가 백테스트 평균 범위 내 (cycle_aware: −15% 이내 기대)
 - [ ] state.json + dashboard.html 자동 commit 정상
 
+## ✅ Phase 4.5 — Binance Testnet 실 매매 (완료, 운영 중)
+
+### 구축한 것
+- [x] src/live/client.py — testnet/mainnet 토글 Binance Client 팩토리
+- [x] src/live/executor.py — rebalance_to_target + LOT_SIZE/MIN_NOTIONAL/PRICE_FILTER 자동 적용
+- [x] src/live/tick.py — fetch→signal→실 API 주문→state/dashboard
+- [x] scripts/live_tick.py — 엔트리 포인트
+- [x] .github/workflows/live_trading.yml — KST 09:35 자동 cron (self-hosted runner)
+- [x] dashboard mode badge (TESTNET 초록 / mainnet 빨강)
+
+### 인프라 (Oracle Cloud Always Free)
+- [x] Oracle Cloud 가입 + 카드 verification (siyunking)
+- [x] Always Free 인스턴스 (Ubuntu 22.04, AMD E2.1.Micro, ap-chuncheon-1)
+- [x] Ephemeral public IP 할당 (168.107.43.97)
+- [x] SSH 키 생성 + 접속 검증
+- [x] Python 3.11 + deadsnakes PPA 설치
+- [x] GHA self-hosted runner 설치 + systemd 서비스 등록
+- [x] Workflow `runs-on: [self-hosted, linux, x64]` 전환
+
+### 첫 거래 검증 (2026-05-17 17:45 UTC)
+- Binance Testnet 가입 시 받은 초기 자산 (1 BTC + ~$10k USDT)
+- cycle_aware 신호 = 0.0 (BTC 보유 0% 목표)
+- → 1.0 BTC 시장가 매도 @ $78,041 (FILLED)
+- → 최종: $88,041 USDT + 0 BTC
+- **실 Binance API 인증 + 주문 + 체결 + 응답 파싱 모두 검증 완료**
+
+### Phase 5 진입 조건 (1~2주 운영 후 평가)
+- [ ] 7일 연속 무중단 자동 실행
+- [ ] 신호 변경 시 (0 → 양수) 매수 거래 발생 검증
+- [ ] state.json + dashboard.html 매일 자동 commit 정상
+- [ ] cycle_aware 신호가 백테스트와 동일하게 계산됨
+
 ## 🔮 Phase 5 — 실거래 (Phase 4 통과 후)
 - [ ] Binance API 키 인증 + 테스트넷 우선
 - [ ] 일일 손실 한도 (예: 자본의 −5%에서 자동 정지)
