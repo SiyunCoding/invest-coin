@@ -1,6 +1,7 @@
 """트레이딩 상태 영속화 (JSON).
 
 live tick에서 매 사이클마다 호출. cash/qty/거래내역/히스토리를 dict로 보관.
+스키마 초기화는 호출자(src/live/tick.py)가 자체 책임.
 """
 from __future__ import annotations
 
@@ -21,19 +22,3 @@ def save_state(path: Path, state: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
-
-
-def init_state(config: dict, started_at: str) -> dict:
-    return {
-        "config": config,
-        "cash": config["initial_capital"],
-        "position": {"qty": 0.0, "avg_cost": 0.0},
-        "trades": [],
-        "history": [],
-        "peak_equity": config["initial_capital"],
-        "started_at": started_at,
-        "last_tick": None,
-        "last_price": None,
-        "last_signal": None,
-        "last_bar_time": None,
-    }

@@ -355,13 +355,16 @@ new Chart(document.getElementById('equityChart').getContext('2d'), {{
 
 def _trade_row(t: dict) -> str:
     side = t.get("side", "?")
-    side_class = "gain" if side == "buy" else "loss"
-    side_label = "매수" if side == "buy" else "매도"
+    side_class, side_label = {
+        "buy": ("gain", "매수"),
+        "sell": ("loss", "매도"),
+        "error": ("muted", "오류"),
+    }.get(side, ("muted", side))
     return f"""
     <tr>
       <td class="muted">{_utc_to_kst_str(t.get("time"))}</td>
       <td class="{side_class}">{side_label}</td>
-      <td class="ticker">{html.escape(t.get("bar_time", "")[:10])}</td>
+      <td class="ticker">{html.escape(t.get("symbol", ""))}</td>
       <td class="num">{_fmt_qty(float(t.get("qty", 0)))}</td>
       <td class="num">{_fmt_money(float(t.get("price", 0)))}</td>
       <td class="num">{_fmt_money(float(t.get("value", 0)))}</td>
