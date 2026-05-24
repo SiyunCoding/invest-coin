@@ -42,3 +42,5 @@ logs/
 
 # Claude Code personal settings (project-level settings.json은 commit 가능, .local은 개인용)
 .claude/settings.local.json
+# Project CLAUDE.md (개인 워크플로우 — global ~/.claude/CLAUDE.md와 중복)
+CLAUDE.md
