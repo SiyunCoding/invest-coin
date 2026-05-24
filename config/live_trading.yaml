@@ -1,4 +1,0 @@
-# 임시 매매 검증용 — cycle_aware 대신 volatility_breakout으로 매수 강제
-# 검증 끝나면 이 파일 삭제 → 자동으로 cycle_aware로 복귀
-strategy: volatility_breakout
-strategy_params: {}
