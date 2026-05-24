@@ -137,6 +137,6 @@
   "last_tick": "2026-05-24T16:24:12.640299+00:00",
   "last_price": 76640.93,
   "last_signal": 1.0,
-  "last_bar_time": "2026-05-23T00:00:00+00:00",
+  "last_bar_time": null,
   "mode": "testnet"
 }
