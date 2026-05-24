@@ -10,10 +10,10 @@
     "lookback_days": 730,
     "initial_capital": 88047.9
   },
-  "cash": 88043.0918427,
+  "cash": 88.6595198,
   "position": {
-    "qty": 0.0,
-    "avg_cost": 0.0
+    "qty": 1.14829,
+    "avg_cost": 76596.01
   },
   "trades": [
     {
@@ -29,6 +29,20 @@
       "symbol": "BTCUSDT",
       "signal": 0.0,
       "bar_time": "2026-05-16T00:00:00+00:00"
+    },
+    {
+      "time": "2026-05-24T16:25:59.133000+00:00",
+      "side": "buy",
+      "qty": 1.14829,
+      "price": 76596.01,
+      "value": 87954.4323229,
+      "fee": 0.0,
+      "fee_asset": "BTC",
+      "order_id": 6885054,
+      "status": "FILLED",
+      "symbol": "BTCUSDT",
+      "signal": 1.0,
+      "bar_time": "2026-05-23T00:00:00+00:00"
     }
   ],
   "history": [
@@ -130,13 +144,22 @@
       "position_value": 0.0,
       "cash": 88043.0918427,
       "equity": 88043.0918427
+    },
+    {
+      "time": "2026-05-24T16:25:58.122466+00:00",
+      "bar_time": "2026-05-23T00:00:00+00:00",
+      "price": 76596.01,
+      "signal": 1.0,
+      "position_value": 87954.4323229,
+      "cash": 88.6595198,
+      "equity": 88043.0918427
     }
   ],
   "peak_equity": 88047.9,
   "started_at": "2026-05-17T17:45:37.624321+00:00",
-  "last_tick": "2026-05-24T16:24:12.640299+00:00",
-  "last_price": 76640.93,
+  "last_tick": "2026-05-24T16:25:58.122466+00:00",
+  "last_price": 76596.01,
   "last_signal": 1.0,
-  "last_bar_time": null,
+  "last_bar_time": "2026-05-23T00:00:00+00:00",
   "mode": "testnet"
 }
