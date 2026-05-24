@@ -61,10 +61,10 @@ def format_tick_notification(mode: str, result: dict) -> str:
 
     원칙:
       - 매매 발생: 체결 정보 + 잔고 현황 풍부하게
-      - 변함없음: "변함없음" 한 줄
+      - 변함없음: 신호/가격/총자산을 함께 표시해 봇 정상 동작 검증 가능하게
       - 에러: 코드/메시지
 
-    result 필수 키: signal, price, equity, cash, base_qty, trade (None 가능), duplicate_bar.
+    result 필수 키: signal, price, equity, cash, base_qty, trade (None 가능), duplicate_bar, bar_time.
     """
     mode_label = {
         "testnet": "📊 실투자 (테스트넷)",
@@ -75,10 +75,33 @@ def format_tick_notification(mode: str, result: dict) -> str:
     trade = result.get("trade")
 
     # CASE 1: 변함없음 (거래 없음)
+    # 헬스체크 역할: 신호/가격/총자산이 매일 갱신되는지 확인 가능.
     if trade is None:
+        bar_short = (result.get("bar_time") or "")[:10]
+        signal = float(result.get("signal", 0))
+        price = float(result.get("price", 0))
+        equity = float(result.get("equity", 0))
+        cash = float(result.get("cash", 0))
+        base_qty = float(result.get("base_qty", 0))
+        position_value = base_qty * price
+        current_weight = (position_value / equity) if equity > 0 else 0.0
+
         if result.get("duplicate_bar"):
-            return f"{header}\n변함없음 (같은 봉)"
-        return f"{header}\n변함없음"
+            reason = "같은 봉 재처리"
+        else:
+            reason = f"목표 {signal*100:.1f}% ↔ 현재 {current_weight*100:.1f}% (1% 미만 차이)"
+
+        lines = [
+            header,
+            f"변함없음 ({reason})",
+            "",
+            f"🎯 신호: `{signal:.3f}` (기준 봉 {bar_short})",
+            f"💰 현재가: `${price:,.2f}`",
+            f"💼 총자산: `${equity:,.2f}`",
+            f"  ├ 예수금: `${cash:,.2f}`",
+            f"  └ BTC: `{base_qty:.6f}` (`${position_value:,.2f}`)",
+        ]
+        return "\n".join(lines)
 
     # CASE 2: 주문 오류
     if trade.get("side") == "error":
