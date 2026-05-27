@@ -362,8 +362,8 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
     if balance_after > state.get("peak_balance", 0):
         state["peak_balance"] = balance_after
 
-    # Heartbeat
-    if state["tick_count"] % heartbeat_every == 0:
+    # Heartbeat (첫 tick에도 1번 보내 — 시작 직후 잘 도는지 즉시 확인 가능)
+    if state["tick_count"] == 1 or state["tick_count"] % heartbeat_every == 0:
         trade_summary = _count_trades_by_type(state["trades"])
         send_telegram_message(_format_heartbeat(
             mode=mode,
