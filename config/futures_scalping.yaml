@@ -1,0 +1,13 @@
+# Futures 50x scalping 설정 (RSI 5m > 70 → SHORT)
+# Binance Futures Demo 엔드포인트: https://demo-fapi.binance.com
+
+symbol: BTCUSDT
+demo: true                # Demo (가짜 돈). false로 바꾸면 실거래
+margin_type: CROSSED      # CROSSED or ISOLATED
+leverage: 50
+margin_usdt: 15           # 1회 진입 마진 (USDT). 노셔널 = 15 × 50 = $750
+tp_profit_pct: 0.30       # 익절 = 마진 30% (≈ 가격 0.3~0.5% 변동)
+cushion_usdt: 2.0         # 수수료 + 슬리피지 안전 마진
+
+rsi_period: 14
+rsi_threshold: 70.0       # RSI > 70이면 진입 (overbought → SHORT)

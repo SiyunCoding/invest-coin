@@ -1,16 +1,25 @@
-"""Binance Testnet/Mainnet 실 매매 모듈.
+"""Binance 실 매매 모듈 (Spot Testnet + Futures Demo).
 
-- 실제 Binance API 호출 (testnet 또는 mainnet)
+- Spot: testnet.binance.vision (현물 cycle_aware 일봉)
+- Futures: demo-fapi.binance.com (선물 50x RSI 5m 스캘핑)
 - source-of-truth = Binance 계정 (JSON은 거래 로그 + 히스토리만 보관)
-- LOT_SIZE / PRICE_FILTER / MIN_NOTIONAL 등 거래소 규칙 자동 적용
-- 부분 체결 / 주문 거부 / 레이트리밋 처리
 
 환경 변수:
-  - BINANCE_TESTNET_API_KEY / BINANCE_TESTNET_API_SECRET (testnet=True 시)
-  - BINANCE_API_KEY / BINANCE_API_SECRET (testnet=False, 실거래)
+  - Spot Testnet: BINANCE_TESTNET_API_KEY / BINANCE_TESTNET_API_SECRET
+  - Spot Mainnet: BINANCE_API_KEY / BINANCE_API_SECRET
+  - Futures Demo: BINANCE_FUTURES_TESTNET_API_KEY / BINANCE_FUTURES_TESTNET_API_SECRET
+  - Futures Mainnet: BINANCE_FUTURES_API_KEY / BINANCE_FUTURES_API_SECRET
 """
 from .client import get_client
 from .executor import rebalance_to_target
+from .futures_client import get_futures_client
+from .futures_tick import run_futures_tick
 from .tick import run_live_tick
 
-__all__ = ["get_client", "rebalance_to_target", "run_live_tick"]
+__all__ = [
+    "get_client",
+    "rebalance_to_target",
+    "run_live_tick",
+    "get_futures_client",
+    "run_futures_tick",
+]
