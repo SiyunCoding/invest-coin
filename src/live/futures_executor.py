@@ -159,10 +159,21 @@ def open_short_with_tp(
 
     qty_target = notional / mark_price
     qty = _round_step(qty_target, filters["lot_step"], ROUND_DOWN)
+    # 거래소 max_qty 초과 시 캡 (cheap 단가 코인 대응)
+    max_qty = float(filters["max_qty"])
+    if qty > max_qty:
+        qty = _round_step(max_qty, filters["lot_step"], ROUND_DOWN)
+        notional = qty * mark_price  # 캡 적용 후 실제 노셔널 갱신
     if qty < float(filters["min_qty"]):
         raise ValueError(
             f"qty {qty} < min_qty {filters['min_qty']} "
             f"(margin {margin_usdt} × lev {leverage} 너무 작음)"
+        )
+    # min_notional 못 채우면 진입 자체가 안 됨
+    if notional < float(filters["min_notional"]):
+        raise ValueError(
+            f"notional {notional:.2f} < min_notional {filters['min_notional']} "
+            f"(max_qty 캡으로 노셔널 부족)"
         )
 
     # 1) SHORT 시장가 진입

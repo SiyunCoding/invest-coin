@@ -60,13 +60,10 @@ def main() -> int:
     lev_min = config.get("leverage_min", config.get("leverage", 50))
     lev_max = config.get("leverage_max", config.get("leverage", 50))
     boot_msg = (
-        f"🟢 *선물 스캘퍼 시작* ({mode})\n"
-        f"• 종목: USDT 무기한 선물 중 max 레버리지 `{lev_min}~{lev_max}x` 코인만\n"
-        f"• 마진 모드: `{config['margin_type']}`\n"
-        f"• 마진/회: `${config['margin_usdt']}` / 익절: 마진 `{int(config['tp_profit_pct']*100)}%`\n"
+        f"🟢 *스캘퍼 시작* ({mode})\n"
+        f"• {lev_min}~{lev_max}x CROSS · 마진 `${config['margin_usdt']}` · 익절 `{int(config['tp_profit_pct']*100)}%`\n"
         f"• 신호: RSI(5m) > `{config['rsi_threshold']}` → SHORT\n"
-        f"• 동시 포지션: 허용 (코인별 독립)\n"
-        f"• 주기: `{SLEEP_SECONDS}`초 · 헬스체크: `{config.get('heartbeat_every_n_ticks', 12)}` tick마다"
+        f"• {SLEEP_SECONDS}초마다 tick"
     )
     send_telegram_message(boot_msg)
     print(f"[scalper/{mode}] started, sleep={SLEEP_SECONDS}s")

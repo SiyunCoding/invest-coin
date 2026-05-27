@@ -89,48 +89,29 @@ def _kst_str(dt: datetime | None = None) -> str:
 
 def _format_entry(mode: str, symbol: str, result: dict, rsi: float, leverage: int) -> str:
     drop_pct = (result["entry_price"] - result["tp_stop_price"]) / result["entry_price"] * 100
-    liq_price = result["entry_price"] * (1 + 1.0 / leverage)
-    liq_pct = (liq_price - result["entry_price"]) / result["entry_price"] * 100
     return "\n".join([
-        f"📉 *SHORT 진입* — `{symbol}` ({mode})",
-        f"`{_kst_str()}`",
-        "",
-        f"• RSI(5m): `{rsi:.2f}`",
-        f"• 진입가: `${result['entry_price']:,.4f}`",
-        f"• 수량: `{result['qty']}` (노셔널 `${result['notional']:,.0f}`)",
-        f"• 마진: `${result['margin_usdt']:.2f}` × {leverage}x",
-        "",
-        f"🎯 TP: `${result['tp_stop_price']:,.4f}` (−{drop_pct:.3f}%)",
-        f"💰 예상 순익: `${result['expected_net_profit']:.2f}`",
-        f"⚠️ 청산: `${liq_price:,.4f}` (+{liq_pct:.2f}%)",
+        f"📉 *SHORT 진입* · `{symbol}`",
+        f"• 마진: `${result['margin_usdt']:.0f}` × `{leverage}x`",
+        f"• 진입가: `${result['entry_price']:,.4f}` · RSI `{rsi:.1f}`",
+        f"• 🎯 TP `${result['tp_stop_price']:,.4f}` (−{drop_pct:.2f}%) → `+${result['expected_net_profit']:.2f}`",
     ])
 
 
 def _format_closure(mode: str, symbol: str, prev_pos: dict, balance_delta: float) -> str:
-    """포지션이 사라졌을 때 (TP 체결 또는 청산). 정확한 P&L은 모르고 잔고 변화로 추정."""
-    if balance_delta > 0:
-        emoji, label = "✅", "TP 체결 (추정)"
+    """포지션이 사라졌을 때 (TP 체결 또는 청산). 잔고 변화로 추정."""
+    if balance_delta > 0.5:
+        emoji, label = "✅", "TP 체결"
     elif balance_delta < -1.0:
-        emoji, label = "💀", "청산 (추정)"
+        emoji, label = "💀", "청산"
     else:
         emoji, label = "🔄", "포지션 정리"
-    return "\n".join([
-        f"{emoji} *{label}* — `{symbol}` ({mode})",
-        f"`{_kst_str()}`",
-        "",
-        f"• 진입가: `${prev_pos['entry_price']:,.4f}`",
-        f"• TP 목표였던: `${prev_pos.get('tp_stop_price', 0):,.4f}`",
-        f"• 잔고 변화: `${balance_delta:+,.2f}`",
-    ])
+    return f"{emoji} *{label}* · `{symbol}` · `${balance_delta:+,.2f}`"
 
 
 def _format_error(mode: str, symbol: str, code, message: str) -> str:
-    return "\n".join([
-        f"⚠️ *진입 오류* — `{symbol}` ({mode})",
-        f"`{_kst_str()}`",
-        f"• 코드: `{code}`",
-        f"• 메시지: `{message[:200]}`",
-    ])
+    # 너무 긴 메시지는 자름
+    short_msg = str(message)[:120]
+    return f"⚠️ `{symbol}` 진입 실패 (`{code}`) {short_msg}"
 
 
 def _format_heartbeat(
@@ -147,28 +128,22 @@ def _format_heartbeat(
     pnl = balance - initial_balance
     pnl_pct = (pnl / initial_balance * 100) if initial_balance > 0 else 0.0
     lines = [
-        f"📊 *스캘퍼 헬스체크* ({mode})",
-        f"`{_kst_str()}` · tick #{tick_count}",
-        "",
-        f"💼 가용 마진: `${balance:,.2f}` (`{pnl:+,.2f}` / `{pnl_pct:+.2f}%`)",
-        f"📈 추적 심볼: `{total_symbols}` (max lev `{leverage_range[0]}~{leverage_range[1]}x`)",
-        f"📦 오픈 포지션: `{len(positions)}`",
+        f"📊 *헬스체크* · tick #{tick_count}",
+        f"💼 `${balance:,.2f}` (`{pnl:+,.2f}` / `{pnl_pct:+.2f}%`)",
+        f"📈 추적 `{total_symbols}` · 오픈 `{len(positions)}` · RSI↑ `{len(candidates)}`",
+        f"🧾 entries `{trade_summary.get('entries', 0)}` / closes `{trade_summary.get('closes', 0)}` / errors `{trade_summary.get('errors', 0)}`",
     ]
     if positions:
-        for sym, p in list(positions.items())[:10]:
-            lines.append(f"  • `{sym}` qty=`{p['qty']}` entry=`${p['entry_price']:,.4f}`")
-        if len(positions) > 10:
-            lines.append(f"  • ...외 {len(positions) - 10}개")
+        lines.append("")
+        for sym, p in list(positions.items())[:8]:
+            lines.append(f"  📦 `{sym}` @ `${p['entry_price']:,.4f}`")
+        if len(positions) > 8:
+            lines.append(f"  ...외 {len(positions) - 8}개")
     if candidates:
-        lines.append(f"🔥 RSI 80↑ 후보: `{len(candidates)}`")
-        for sym, rsi in sorted(candidates, key=lambda x: -x[1])[:5]:
-            lines.append(f"  • `{sym}` RSI=`{rsi:.2f}`")
-    lines.append("")
-    lines.append(
-        f"🧾 누적: entries `{trade_summary.get('entries', 0)}` / "
-        f"closes `{trade_summary.get('closes', 0)}` / "
-        f"errors `{trade_summary.get('errors', 0)}`"
-    )
+        lines.append("")
+        top = sorted(candidates, key=lambda x: -x[1])[:5]
+        cand_str = " · ".join(f"`{s}`(`{r:.1f}`)" for s, r in top)
+        lines.append(f"  🔥 후보: {cand_str}")
     return "\n".join(lines)
 
 
