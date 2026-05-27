@@ -99,6 +99,21 @@ def get_all_mark_prices(client: Client) -> dict:
     return {p["symbol"]: float(p["markPrice"]) for p in prices}
 
 
+def get_max_leverage_map(client: Client) -> dict[str, int]:
+    """모든 심볼의 최대 레버리지를 한 번에 조회 → {symbol: max_leverage}.
+
+    brackets[0].initialLeverage = 가장 낮은 notional 구간의 최대 레버리지
+    (= 그 심볼이 제공하는 최대 배수).
+    """
+    out = {}
+    for entry in client.futures_leverage_bracket():
+        sym = entry["symbol"]
+        brackets = entry.get("brackets") or []
+        if brackets:
+            out[sym] = int(brackets[0].get("initialLeverage", 1))
+    return out
+
+
 def list_usdt_perpetuals(client: Client, exclude: list[str] | None = None) -> list[str]:
     """현재 거래 중인 모든 USDⓈ-M 무기한 선물 심볼.
 

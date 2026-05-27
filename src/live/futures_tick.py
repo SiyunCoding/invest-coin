@@ -39,6 +39,7 @@ from .futures_executor import (
     get_all_mark_prices,
     get_all_positions,
     get_available_balance,
+    get_max_leverage_map,
     list_usdt_perpetuals,
     open_short_with_tp,
 )
@@ -206,14 +207,20 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
         balance0 = get_available_balance(client, "USDT")
         state = _init_state(config, now.isoformat(), balance0)
 
-    # 1) 심볼 리스트 (cache: 1시간마다 갱신)
+    # 1) 심볼 리스트 + 최대 레버리지 (cache: 1시간마다 갱신)
     last_symbols_fetch = state.get("last_symbols_fetch_ts", 0)
     symbols_cache = state.get("symbols_cache", [])
+    max_lev_cache = state.get("max_leverage_map", {})
     if explicit_symbols:
         symbols = explicit_symbols
-    elif not symbols_cache or (time.time() - last_symbols_fetch) > 3600:
+        if not max_lev_cache:
+            max_lev_cache = get_max_leverage_map(client)
+            state["max_leverage_map"] = max_lev_cache
+    elif not symbols_cache or not max_lev_cache or (time.time() - last_symbols_fetch) > 3600:
         symbols = list_usdt_perpetuals(client, exclude=exclude_symbols)
+        max_lev_cache = get_max_leverage_map(client)
         state["symbols_cache"] = symbols
+        state["max_leverage_map"] = max_lev_cache
         state["last_symbols_fetch_ts"] = time.time()
     else:
         symbols = symbols_cache
@@ -270,11 +277,15 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
             if balance_before < margin_usdt * 1.5:
                 continue
 
-            # 레버리지/마진 모드 1회 설정
+            # 각 코인의 최대 레버리지에 맞춰 clamp (50x 미지원 코인 대응)
+            symbol_max_lev = int(max_lev_cache.get(symbol, leverage))
+            effective_lev = min(leverage, symbol_max_lev)
+
+            # 레버리지/마진 모드 1회 설정 (clamped 값 사용)
             if not state["leverage_initialized"].get(symbol):
                 try:
                     ensure_leverage_and_margin(
-                        client, symbol, leverage,
+                        client, symbol, effective_lev,
                         margin_type=config.get("margin_type", "CROSSED")
                     )
                     state["leverage_initialized"][symbol] = True
@@ -283,7 +294,7 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
                     state["trades"].append({
                         "time": now.isoformat(), "type": "error", "symbol": symbol,
                         "error_code": e.code, "error_message": str(e.message),
-                        "stage": "leverage",
+                        "stage": "leverage", "attempted_leverage": effective_lev,
                     })
                     continue
 
@@ -297,7 +308,7 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
             try:
                 result = open_short_with_tp(
                     client, symbol=symbol,
-                    margin_usdt=margin_usdt, leverage=leverage,
+                    margin_usdt=margin_usdt, leverage=effective_lev,
                     tp_profit_pct=tp_profit_pct, cushion_usdt=cushion_usdt,
                 )
             except (BinanceAPIException, ValueError) as e:
@@ -311,7 +322,7 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
                 })
                 continue
 
-            new_entries.append({"symbol": symbol, "result": result, "rsi": rsi})
+            new_entries.append({"symbol": symbol, "result": result, "rsi": rsi, "leverage": effective_lev})
             state["positions"][symbol] = {
                 "qty": result["qty"],
                 "entry_price": result["entry_price"],
@@ -326,7 +337,7 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
                 "qty": result["qty"],
                 "entry_price": result["entry_price"],
                 "tp_stop_price": result["tp_stop_price"],
-                "leverage": leverage,
+                "leverage": effective_lev,
                 "margin_usdt": margin_usdt,
                 "notional": result["notional"],
                 "rsi": rsi,
@@ -347,7 +358,7 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
 
     # 5) 알림 발송
     for entry in new_entries:
-        send_telegram_message(_format_entry(mode, entry["symbol"], entry["result"], entry["rsi"], leverage))
+        send_telegram_message(_format_entry(mode, entry["symbol"], entry["result"], entry["rsi"], entry["leverage"]))
 
     for closure in closures:
         # closure 시 잔고 변화는 (closure 1건 가정) 단순 추정 — 여러 closure 동시면 분배 불가, 합쳐서 표시
