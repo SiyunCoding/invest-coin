@@ -19,7 +19,9 @@ import os
 
 from binance.client import Client
 
-DEMO_FUTURES_URL = "https://demo-fapi.binance.com"
+# python-binance가 FUTURES_URL + '/v{N}/{path}' 로 조립하므로 base에 /fapi 포함 필수.
+DEMO_FUTURES_URL = "https://demo-fapi.binance.com/fapi"
+DEMO_FUTURES_DATA_URL = "https://demo-fapi.binance.com/futures/data"
 
 
 def get_futures_client(demo: bool = True) -> Client:
@@ -31,9 +33,11 @@ def get_futures_client(demo: bool = True) -> Client:
             raise RuntimeError(
                 "BINANCE_FUTURES_TESTNET_API_KEY / BINANCE_FUTURES_TESTNET_API_SECRET 환경 변수가 필요."
             )
-        # testnet=False로 만들어도 됨 (어차피 URL 수동 오버라이드)
         client = Client(key, secret)
         client.FUTURES_URL = DEMO_FUTURES_URL
+        # FUTURES_DATA_URL은 일부 통계 API (open interest 등)에서 사용
+        if hasattr(client, "FUTURES_DATA_URL"):
+            client.FUTURES_DATA_URL = DEMO_FUTURES_DATA_URL
         return client
     else:
         key = os.environ.get("BINANCE_FUTURES_API_KEY")
