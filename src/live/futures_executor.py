@@ -87,6 +87,38 @@ def get_available_balance(client: Client, asset: str = "USDT") -> float:
     return 0.0
 
 
+def get_all_positions(client: Client) -> dict:
+    """모든 심볼의 현재 포지션을 한 번에 조회 → {symbol: positionAmt}."""
+    positions = client.futures_position_information()
+    return {p["symbol"]: float(p["positionAmt"]) for p in positions}
+
+
+def get_all_mark_prices(client: Client) -> dict:
+    """모든 심볼의 mark price를 한 번에 조회 → {symbol: markPrice}."""
+    prices = client.futures_mark_price()
+    return {p["symbol"]: float(p["markPrice"]) for p in prices}
+
+
+def list_usdt_perpetuals(client: Client, exclude: list[str] | None = None) -> list[str]:
+    """현재 거래 중인 모든 USDⓈ-M 무기한 선물 심볼.
+
+    필터: contractType=PERPETUAL, status=TRADING, quoteAsset=USDT.
+    (분기 만기물 / 정지/상폐 종목 / COIN-M 자동 제외)
+    """
+    exclude_set = set(exclude or [])
+    info = client.futures_exchange_info()
+    symbols = []
+    for s in info["symbols"]:
+        if (
+            s.get("contractType") == "PERPETUAL"
+            and s.get("status") == "TRADING"
+            and s.get("quoteAsset") == "USDT"
+            and s["symbol"] not in exclude_set
+        ):
+            symbols.append(s["symbol"])
+    return sorted(symbols)
+
+
 def open_short_with_tp(
     client: Client,
     symbol: str,

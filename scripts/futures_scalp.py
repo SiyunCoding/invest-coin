@@ -30,20 +30,19 @@ def main() -> int:
     config = _load_config()
     state_path = ROOT / "data" / "futures_state.json"
     mode = "demo" if config.get("demo", True) else "MAINNET"
-    print(f"[futures/{mode}] tick start — symbol={config['symbol']}, "
-          f"leverage={config['leverage']}x, margin=${config['margin_usdt']}")
+    print(f"[futures/{mode}] tick start — leverage={config['leverage']}x, "
+          f"margin=${config['margin_usdt']}, RSI>{config['rsi_threshold']} SHORT")
 
     result = run_futures_tick(state_path=state_path, config=config)
 
-    print(f"[futures/{mode}] RSI(5m)={result['rsi']:.2f}, "
-          f"price=${result['price']:,.2f}, "
+    print(f"[futures/{mode}] tick #{result['tick_count']} — "
+          f"symbols={result['total_symbols']}, "
           f"balance=${result['balance']:,.2f}, "
-          f"position_amt={result['position_amt']:.6f}")
-    if result["new_trade"]:
-        t = result["new_trade"]
-        print(f"[futures/{mode}] {t['side']} ENTRY "
-              f"qty={t['qty']:.6f} @ ${t['entry_price']:,.2f}, "
-              f"TP @ ${t['tp_stop_price']:,.2f}")
+          f"open_positions={result['open_positions']}, "
+          f"entries={result['new_entries']}, "
+          f"closures={result['closures']}, "
+          f"errors={result['errors']}, "
+          f"rsi_candidates={result['rsi_candidates']}")
     return 0
 
 

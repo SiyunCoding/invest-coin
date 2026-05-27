@@ -59,10 +59,12 @@ def main() -> int:
     mode = "demo" if config.get("demo", True) else "MAINNET"
     boot_msg = (
         f"🟢 *선물 스캘퍼 시작* ({mode})\n"
-        f"• 종목: `{config['symbol']}` · `{config['leverage']}x` `{config['margin_type']}`\n"
-        f"• 마진: `${config['margin_usdt']}` / 익절: 마진 `{int(config['tp_profit_pct']*100)}%`\n"
+        f"• 종목: USDT 무기한 선물 전체 (자동)\n"
+        f"• 레버리지: `{config['leverage']}x` `{config['margin_type']}`\n"
+        f"• 마진/회: `${config['margin_usdt']}` / 익절: 마진 `{int(config['tp_profit_pct']*100)}%`\n"
         f"• 신호: RSI(5m) > `{config['rsi_threshold']}` → SHORT\n"
-        f"• 주기: `{SLEEP_SECONDS}`초"
+        f"• 동시 포지션: 허용 (코인별 독립)\n"
+        f"• 주기: `{SLEEP_SECONDS}`초 · 헬스체크: `{config.get('heartbeat_every_n_ticks', 12)}` tick마다"
     )
     send_telegram_message(boot_msg)
     print(f"[scalper/{mode}] started, sleep={SLEEP_SECONDS}s")
@@ -76,9 +78,12 @@ def main() -> int:
             ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
             print(
                 f"[scalper/{mode}] {ts} tick #{tick_count} OK — "
-                f"RSI={result['rsi']:.2f}, price=${result['price']:,.2f}, "
-                f"position_amt={result['position_amt']:.6f}, "
-                f"balance=${result['balance']:,.2f}"
+                f"symbols={result['total_symbols']}, "
+                f"balance=${result['balance']:,.2f}, "
+                f"positions={result['open_positions']}, "
+                f"entries={result['new_entries']}, "
+                f"closures={result['closures']}, "
+                f"errors={result['errors']}"
             )
         except Exception as e:
             tb = traceback.format_exc()

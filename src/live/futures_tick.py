@@ -1,22 +1,29 @@
-"""한 번의 Futures Scalping Tick (50x SHORT on RSI 5m > 70).
+"""한 번의 Futures Scalping Tick (멀티 코인 50x SHORT on RSI 5m > threshold).
 
 흐름:
-  1. Binance에서 현재 포지션 + 사용 가능 마진 조회
-  2. 5분봉 데이터 받아서 RSI(14) 계산
-  3. 포지션 있으면: 기다림 (TP가 서버에서 자동 처리 중)
-  4. 포지션 없으면:
-     - RSI > 70 → SHORT 진입 + TP 자동 청산 주문
-     - RSI ≤ 70 → 진입 안 함
-  5. state.json + Telegram 알림
+  1. Binance Futures exchange_info → 모든 USDT 무기한 선물 심볼 자동 수집
+  2. 포지션 + mark price 한 방에 조회 (코인별로 안 돌림)
+  3. 각 심볼:
+     a. 5분봉 → RSI(14) 계산
+     b. 포지션 있으면: 기다림 (TP 서버에서 자동 처리)
+     c. 포지션 없으면:
+        - 직전에 포지션 있었으면 closure 감지 (TP 체결 or 청산)
+        - RSI > threshold → 진입 + TP 자동 청산 주문
+  4. 알림 정책 (텔레그램 폭탄 방지):
+     - 진입 / 청산 / 에러 → 즉시 알림 (코인별)
+     - 일반 idle → 알림 안 보냄
+     - 1시간마다 1번 헬스체크 요약 알림 (heartbeat_every_n_ticks)
 
 설계:
   - source of truth = Binance (포지션은 매 tick 재조회)
   - 손절 없음 (Binance가 −100% 마진에서 자동 청산)
   - 익절은 TAKE_PROFIT_MARKET 서버 사이드 주문
+  - 동시 포지션 허용 (코인마다 독립)
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -29,252 +36,369 @@ from .futures_client import get_futures_client
 from .futures_executor import (
     cancel_all_open_orders,
     ensure_leverage_and_margin,
+    get_all_mark_prices,
+    get_all_positions,
     get_available_balance,
-    get_mark_price,
-    get_position_amt,
+    list_usdt_perpetuals,
     open_short_with_tp,
 )
+
+# Binance API rate-limit 여유: klines 호출은 가중치 1, 분당 2400 한도라
+# 100개 심볼 × 1콜 = 100 weight per tick, 5분당이라 충분히 안전.
+# 다만 너무 빨리 던지면 burst limit 걸릴 수 있어서 50ms slot.
+_KLINES_SLEEP_SEC = 0.05
 
 
 def _init_state(config: dict, started_at: str, initial_balance: float) -> dict:
     return {
         "config": config,
         "initial_balance": initial_balance,
-        "trades": [],
-        "history": [],
+        "trades": [],  # 모든 거래 이력 (entry/closure/error), 각각 symbol 포함
+        "history": [],  # tick별 요약 (요즘은 짧게 보관)
         "peak_balance": initial_balance,
         "started_at": started_at,
         "last_tick": None,
-        "last_rsi": None,
-        "last_price": None,
-        "current_position": None,  # {qty, entry_price, tp_stop_price, entered_at}
+        "tick_count": 0,
+        "positions": {},  # {symbol: {qty, entry_price, tp_stop_price, entered_at}}
+        "leverage_initialized": {},  # {symbol: true}
         "mode": "futures-demo" if config.get("demo", True) else "futures-mainnet",
     }
 
 
 def _fetch_rsi_5m(client, symbol: str, period: int = 14, limit: int = 100) -> float:
-    """선물 5분봉 받아서 마지막 RSI 값 반환. 마감된 봉만 사용."""
+    """선물 5분봉 받아서 마지막 RSI 값. 미마감 봉 제외."""
     klines = client.futures_klines(symbol=symbol, interval="5m", limit=limit)
-    # kline 컬럼: [open_time, open, high, low, close, volume, close_time, ...]
     closes = pd.Series([float(k[4]) for k in klines])
     close_times = [int(k[6]) for k in klines]
     now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
-    # 마지막 봉이 미마감(close_time > now)이면 그 봉 제외
-    if close_times[-1] > now_ms:
+    if close_times and close_times[-1] > now_ms:
         closes = closes.iloc[:-1]
+    if len(closes) < period + 5:
+        return float("nan")
     rsi = wilder_rsi(closes, period=period)
     return float(rsi.iloc[-1])
 
 
-def _format_entry_notification(mode: str, result: dict) -> str:
-    """진입 직후 텔레그램 메시지."""
-    from datetime import timedelta
-    kst = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=9)))
-    header = f"📉 선물 SHORT 진입 ({mode}) · {kst.strftime('%Y-%m-%d %H:%M KST')}"
-    lines = [
-        header,
-        "",
-        f"• 종목: `{result['symbol']}`",
-        f"• 진입가: `${result['entry_price']:,.2f}`",
-        f"• 수량: `{result['qty']:.6f} BTC` (노셔널 `${result['notional']:,.0f}`)",
-        f"• 마진: `${result['margin_usdt']:.2f}` × {result['leverage']}x",
-        f"• RSI(5m): `{result['rsi']:.2f}`",
-        "",
-        f"🎯 TP 자동 청산 주문: `${result['tp_stop_price']:,.2f}` (가격 −{result['drop_pct']:.3f}%)",
-        f"💰 예상 순익: `${result['expected_net_profit']:.2f}` (수수료 `${result['estimated_fees']:.2f}` 별도)",
-        f"⚠️ 청산가 (Binance 자동): `${result['liquidation_price_est']:,.2f}` (가격 +{result['liq_pct']:.2f}%)",
-    ]
-    return "\n".join(lines)
+def _kst_str(dt: datetime | None = None) -> str:
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    kst = dt.astimezone(timezone(timedelta(hours=9)))
+    return kst.strftime("%Y-%m-%d %H:%M KST")
 
 
-def _format_idle_notification(mode: str, rsi: float, price: float, balance: float, position: dict | None) -> str:
-    """진입 없음 / 포지션 보유 중 알림."""
-    from datetime import timedelta
-    kst = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=9)))
-    header = f"📊 선물 스캘핑 ({mode}) · {kst.strftime('%Y-%m-%d %H:%M KST')}"
-    if position is not None:
-        return "\n".join([
-            header,
-            "포지션 보유 중 (TP 대기)",
-            "",
-            f"🎯 SHORT qty: `{position['qty']:.6f} BTC`",
-            f"📌 진입가: `${position['entry_price']:,.2f}`",
-            f"💰 현재가: `${price:,.2f}`",
-            f"🎁 TP 목표: `${position['tp_stop_price']:,.2f}`",
-            f"📊 RSI(5m): `{rsi:.2f}`",
-        ])
+def _format_entry(mode: str, symbol: str, result: dict, rsi: float, leverage: int) -> str:
+    drop_pct = (result["entry_price"] - result["tp_stop_price"]) / result["entry_price"] * 100
+    liq_price = result["entry_price"] * (1 + 1.0 / leverage)
+    liq_pct = (liq_price - result["entry_price"]) / result["entry_price"] * 100
     return "\n".join([
-        header,
-        f"진입 대기 (RSI {rsi:.2f} ≤ 70)",
+        f"📉 *SHORT 진입* — `{symbol}` ({mode})",
+        f"`{_kst_str()}`",
         "",
-        f"💰 현재가: `${price:,.2f}`",
-        f"💼 가용 마진: `${balance:,.2f}`",
+        f"• RSI(5m): `{rsi:.2f}`",
+        f"• 진입가: `${result['entry_price']:,.4f}`",
+        f"• 수량: `{result['qty']}` (노셔널 `${result['notional']:,.0f}`)",
+        f"• 마진: `${result['margin_usdt']:.2f}` × {leverage}x",
+        "",
+        f"🎯 TP: `${result['tp_stop_price']:,.4f}` (−{drop_pct:.3f}%)",
+        f"💰 예상 순익: `${result['expected_net_profit']:.2f}`",
+        f"⚠️ 청산: `${liq_price:,.4f}` (+{liq_pct:.2f}%)",
     ])
 
 
-def run_futures_tick(
-    state_path: Path,
-    config: dict,
-) -> dict:
-    """Futures scalping tick 한 번 실행."""
+def _format_closure(mode: str, symbol: str, prev_pos: dict, balance_delta: float) -> str:
+    """포지션이 사라졌을 때 (TP 체결 또는 청산). 정확한 P&L은 모르고 잔고 변화로 추정."""
+    if balance_delta > 0:
+        emoji, label = "✅", "TP 체결 (추정)"
+    elif balance_delta < -1.0:
+        emoji, label = "💀", "청산 (추정)"
+    else:
+        emoji, label = "🔄", "포지션 정리"
+    return "\n".join([
+        f"{emoji} *{label}* — `{symbol}` ({mode})",
+        f"`{_kst_str()}`",
+        "",
+        f"• 진입가: `${prev_pos['entry_price']:,.4f}`",
+        f"• TP 목표였던: `${prev_pos.get('tp_stop_price', 0):,.4f}`",
+        f"• 잔고 변화: `${balance_delta:+,.2f}`",
+    ])
+
+
+def _format_error(mode: str, symbol: str, code, message: str) -> str:
+    return "\n".join([
+        f"⚠️ *진입 오류* — `{symbol}` ({mode})",
+        f"`{_kst_str()}`",
+        f"• 코드: `{code}`",
+        f"• 메시지: `{message[:200]}`",
+    ])
+
+
+def _format_heartbeat(
+    mode: str,
+    balance: float,
+    initial_balance: float,
+    positions: dict,
+    candidates: list[tuple[str, float]],
+    total_symbols: int,
+    tick_count: int,
+    trade_summary: dict,
+) -> str:
+    pnl = balance - initial_balance
+    pnl_pct = (pnl / initial_balance * 100) if initial_balance > 0 else 0.0
+    lines = [
+        f"📊 *스캘퍼 헬스체크* ({mode})",
+        f"`{_kst_str()}` · tick #{tick_count}",
+        "",
+        f"💼 가용 마진: `${balance:,.2f}` (`{pnl:+,.2f}` / `{pnl_pct:+.2f}%`)",
+        f"📈 추적 심볼: `{total_symbols}` (USDT 무기한)",
+        f"📦 오픈 포지션: `{len(positions)}`",
+    ]
+    if positions:
+        for sym, p in list(positions.items())[:10]:
+            lines.append(f"  • `{sym}` qty=`{p['qty']}` entry=`${p['entry_price']:,.4f}`")
+        if len(positions) > 10:
+            lines.append(f"  • ...외 {len(positions) - 10}개")
+    if candidates:
+        lines.append(f"🔥 RSI 80↑ 후보: `{len(candidates)}`")
+        for sym, rsi in sorted(candidates, key=lambda x: -x[1])[:5]:
+            lines.append(f"  • `{sym}` RSI=`{rsi:.2f}`")
+    lines.append("")
+    lines.append(
+        f"🧾 누적: entries `{trade_summary.get('entries', 0)}` / "
+        f"closes `{trade_summary.get('closes', 0)}` / "
+        f"errors `{trade_summary.get('errors', 0)}`"
+    )
+    return "\n".join(lines)
+
+
+def _count_trades_by_type(trades: list) -> dict:
+    out = {"entries": 0, "closes": 0, "errors": 0}
+    for t in trades:
+        tp = t.get("type", "")
+        if tp == "entry":
+            out["entries"] += 1
+        elif tp == "closure":
+            out["closes"] += 1
+        elif tp == "error":
+            out["errors"] += 1
+    return out
+
+
+def run_futures_tick(state_path: Path, config: dict) -> dict:
+    """멀티 심볼 Futures scalping tick 한 번."""
     now = datetime.now(timezone.utc)
     demo = bool(config.get("demo", True))
-    symbol = config["symbol"]
     leverage = int(config["leverage"])
     margin_usdt = float(config["margin_usdt"])
     tp_profit_pct = float(config["tp_profit_pct"])
     cushion_usdt = float(config.get("cushion_usdt", 2.0))
-    rsi_threshold = float(config.get("rsi_threshold", 70.0))
+    rsi_threshold = float(config.get("rsi_threshold", 80.0))
     rsi_period = int(config.get("rsi_period", 14))
+    heartbeat_every = int(config.get("heartbeat_every_n_ticks", 12))  # 12 × 5분 = 1시간
+    exclude_symbols = list(config.get("exclude_symbols", []))
+    explicit_symbols = list(config.get("symbols", []))  # 비어있으면 자동 수집
 
     client = get_futures_client(demo=demo)
     mode = "futures-demo" if demo else "futures-mainnet"
 
-    # 0. 잔고 + 포지션 + 가격 조회
-    balance = get_available_balance(client, "USDT")
-    position_amt = get_position_amt(client, symbol)  # SHORT면 음수
-    mark_price = get_mark_price(client, symbol)
-
-    # State 로드 (또는 초기화)
+    # State (없거나 옛 단일심볼 스키마면 새로 초기화)
     state = load_state(state_path)
-    if state is None:
-        state = _init_state(config, now.isoformat(), balance)
+    if state is None or "positions" not in state or "leverage_initialized" not in state:
+        balance0 = get_available_balance(client, "USDT")
+        state = _init_state(config, now.isoformat(), balance0)
 
-    # 레버리지/마진 모드 최초 1회 설정 (idempotent)
-    if not state.get("leverage_initialized"):
-        ensure_leverage_and_margin(
-            client, symbol, leverage, margin_type=config.get("margin_type", "CROSSED")
-        )
-        state["leverage_initialized"] = True
-
-    # 1. RSI 계산
-    rsi = _fetch_rsi_5m(client, symbol, period=rsi_period)
-
-    # 2. 포지션 상태별 분기
-    notification_text = None
-    new_trade = None
-
-    has_position = abs(position_amt) > 1e-9
-    if has_position:
-        # TP가 서버에서 처리 중. idle 알림만.
-        pos = state.get("current_position") or {
-            "qty": abs(position_amt),
-            "entry_price": mark_price,  # 모르면 현재가로 fallback
-            "tp_stop_price": 0,
-        }
-        notification_text = _format_idle_notification(mode, rsi, mark_price, balance, pos)
+    # 1) 심볼 리스트 (cache: 1시간마다 갱신)
+    last_symbols_fetch = state.get("last_symbols_fetch_ts", 0)
+    symbols_cache = state.get("symbols_cache", [])
+    if explicit_symbols:
+        symbols = explicit_symbols
+    elif not symbols_cache or (time.time() - last_symbols_fetch) > 3600:
+        symbols = list_usdt_perpetuals(client, exclude=exclude_symbols)
+        state["symbols_cache"] = symbols
+        state["last_symbols_fetch_ts"] = time.time()
     else:
-        # 포지션 없음. 직전 TP 체결이 있었나 확인 + 청산기록 정리
-        prev_pos = state.get("current_position")
-        if prev_pos is not None:
-            # 직전에 포지션 있었는데 지금은 없음 = TP 체결 or 청산됨
-            close_event = {
-                "time": now.isoformat(),
-                "type": "position_closed",
-                "qty": prev_pos["qty"],
-                "entry_price": prev_pos["entry_price"],
-                "tp_stop_price": prev_pos.get("tp_stop_price"),
-                "balance_after": balance,
-            }
-            state["trades"].append(close_event)
-            state["current_position"] = None
+        symbols = symbols_cache
 
-        # RSI 진입 신호?
-        if rsi > rsi_threshold:
-            # 묵은 TP 주문 있으면 정리
-            cancel_all_open_orders(client, symbol)
+    # 2) 잔고 + 전체 포지션 + 전체 mark price (총 3콜)
+    balance_before = get_available_balance(client, "USDT")
+    positions_map = get_all_positions(client)  # {symbol: positionAmt}
+    marks_map = get_all_mark_prices(client)    # {symbol: markPrice}
+
+    # 3) 심볼 루프
+    new_entries = []
+    closures = []
+    errors = []
+    rsi_candidates = []  # RSI > threshold이지만 아직 진입 안 된 (자본 부족 등) 목록
+
+    for symbol in symbols:
+        try:
+            pos_amt = positions_map.get(symbol, 0.0)
+            has_position = abs(pos_amt) > 1e-9
+            mark_price = marks_map.get(symbol)
+            if mark_price is None:
+                continue
+
+            # 포지션 있는 심볼: idle 처리만
+            if has_position:
+                continue
+
+            # 포지션 없는 심볼: 직전에 있었으면 closure, RSI 보고 진입 판단
+            prev_pos = state["positions"].get(symbol)
+            if prev_pos is not None:
+                # 포지션 사라졌음 → closure
+                closures.append({"symbol": symbol, "prev_pos": prev_pos})
+                state["positions"].pop(symbol, None)
+                state["trades"].append({
+                    "time": now.isoformat(),
+                    "type": "closure",
+                    "symbol": symbol,
+                    "entry_price": prev_pos["entry_price"],
+                    "tp_stop_price": prev_pos.get("tp_stop_price"),
+                })
+
+            # RSI 계산
+            rsi = _fetch_rsi_5m(client, symbol, period=rsi_period)
+            if pd.isna(rsi):
+                continue
+
+            if rsi <= rsi_threshold:
+                continue
+
+            # RSI > threshold → 진입 시도
+            rsi_candidates.append((symbol, rsi))
+
+            # 자본 가드: 마진 충분히 남았는지
+            if balance_before < margin_usdt * 1.5:
+                continue
+
+            # 레버리지/마진 모드 1회 설정
+            if not state["leverage_initialized"].get(symbol):
+                try:
+                    ensure_leverage_and_margin(
+                        client, symbol, leverage,
+                        margin_type=config.get("margin_type", "CROSSED")
+                    )
+                    state["leverage_initialized"][symbol] = True
+                except BinanceAPIException as e:
+                    errors.append({"symbol": symbol, "code": e.code, "message": str(e.message)})
+                    state["trades"].append({
+                        "time": now.isoformat(), "type": "error", "symbol": symbol,
+                        "error_code": e.code, "error_message": str(e.message),
+                        "stage": "leverage",
+                    })
+                    continue
+
+            # 묵은 TP 주문 청소
+            try:
+                cancel_all_open_orders(client, symbol)
+            except BinanceAPIException:
+                pass
+
+            # 진입
             try:
                 result = open_short_with_tp(
-                    client,
-                    symbol=symbol,
-                    margin_usdt=margin_usdt,
-                    leverage=leverage,
-                    tp_profit_pct=tp_profit_pct,
-                    cushion_usdt=cushion_usdt,
+                    client, symbol=symbol,
+                    margin_usdt=margin_usdt, leverage=leverage,
+                    tp_profit_pct=tp_profit_pct, cushion_usdt=cushion_usdt,
                 )
-            except BinanceAPIException as e:
-                err_trade = {
-                    "time": now.isoformat(),
-                    "type": "error",
-                    "error_code": e.code,
-                    "error_message": str(e.message),
-                    "rsi": rsi,
-                }
-                state["trades"].append(err_trade)
-                notification_text = (
-                    f"⚠️ 선물 진입 오류 ({mode})\n"
-                    f"• 코드: `{e.code}`\n"
-                    f"• 메시지: `{e.message}`"
-                )
-            else:
-                # 청산가 추정 (cross 50x): 가격 +1/leverage = liquidation
-                liq_price_est = result["entry_price"] * (1 + 1.0 / leverage)
-                drop_pct = (result["entry_price"] - result["tp_stop_price"]) / result["entry_price"] * 100
-                liq_pct = (liq_price_est - result["entry_price"]) / result["entry_price"] * 100
+            except (BinanceAPIException, ValueError) as e:
+                code = getattr(e, "code", "VALUE_ERROR")
+                msg = getattr(e, "message", str(e))
+                errors.append({"symbol": symbol, "code": code, "message": str(msg)})
+                state["trades"].append({
+                    "time": now.isoformat(), "type": "error", "symbol": symbol,
+                    "error_code": code, "error_message": str(msg),
+                    "stage": "open_short", "rsi": rsi,
+                })
+                continue
 
-                new_trade = {
-                    "time": now.isoformat(),
-                    "type": "entry",
-                    "side": "SHORT",
-                    "symbol": symbol,
-                    "qty": result["qty"],
-                    "entry_price": result["entry_price"],
-                    "tp_stop_price": result["tp_stop_price"],
-                    "leverage": leverage,
-                    "margin_usdt": margin_usdt,
-                    "notional": result["notional"],
-                    "expected_net_profit": result["expected_net_profit"],
-                    "estimated_fees": result["estimated_fees"],
-                    "rsi": rsi,
-                    "entry_order_id": result["entry"].get("orderId"),
-                    "tp_order_id": result["tp"].get("orderId"),
-                }
-                state["trades"].append(new_trade)
-                state["current_position"] = {
-                    "qty": result["qty"],
-                    "entry_price": result["entry_price"],
-                    "tp_stop_price": result["tp_stop_price"],
-                    "entered_at": now.isoformat(),
-                }
-                notification_text = _format_entry_notification(
-                    mode,
-                    {
-                        **result,
-                        "symbol": symbol,
-                        "rsi": rsi,
-                        "drop_pct": drop_pct,
-                        "liquidation_price_est": liq_price_est,
-                        "liq_pct": liq_pct,
-                    },
-                )
-        else:
-            notification_text = _format_idle_notification(mode, rsi, mark_price, balance, None)
+            new_entries.append({"symbol": symbol, "result": result, "rsi": rsi})
+            state["positions"][symbol] = {
+                "qty": result["qty"],
+                "entry_price": result["entry_price"],
+                "tp_stop_price": result["tp_stop_price"],
+                "entered_at": now.isoformat(),
+            }
+            state["trades"].append({
+                "time": now.isoformat(),
+                "type": "entry",
+                "symbol": symbol,
+                "side": "SHORT",
+                "qty": result["qty"],
+                "entry_price": result["entry_price"],
+                "tp_stop_price": result["tp_stop_price"],
+                "leverage": leverage,
+                "margin_usdt": margin_usdt,
+                "notional": result["notional"],
+                "rsi": rsi,
+                "entry_order_id": result["entry"].get("orderId"),
+                "tp_order_id": result["tp"].get("orderId"),
+            })
 
-    # 3. State 갱신 + 히스토리 추가
+            # 잔고 즉시 갱신 (자본 가드용)
+            balance_before -= margin_usdt
+
+            # 너무 빨리 던지면 rate limit
+            time.sleep(_KLINES_SLEEP_SEC)
+        except Exception as e:
+            errors.append({"symbol": symbol, "code": "EXCEPTION", "message": str(e)})
+
+    # 4) 잔고 재조회 (closure 잔고 변화 추정용)
+    balance_after = get_available_balance(client, "USDT")
+
+    # 5) 알림 발송
+    for entry in new_entries:
+        send_telegram_message(_format_entry(mode, entry["symbol"], entry["result"], entry["rsi"], leverage))
+
+    for closure in closures:
+        # closure 시 잔고 변화는 (closure 1건 가정) 단순 추정 — 여러 closure 동시면 분배 불가, 합쳐서 표시
+        delta = (balance_after - balance_before) / max(1, len(closures))
+        send_telegram_message(_format_closure(mode, closure["symbol"], closure["prev_pos"], delta))
+
+    for err in errors:
+        send_telegram_message(_format_error(mode, err["symbol"], err["code"], err["message"]))
+
+    state["tick_count"] = state.get("tick_count", 0) + 1
+    state["last_tick"] = now.isoformat()
+    if balance_after > state.get("peak_balance", 0):
+        state["peak_balance"] = balance_after
+
+    # Heartbeat
+    if state["tick_count"] % heartbeat_every == 0:
+        trade_summary = _count_trades_by_type(state["trades"])
+        send_telegram_message(_format_heartbeat(
+            mode=mode,
+            balance=balance_after,
+            initial_balance=state["initial_balance"],
+            positions=state["positions"],
+            candidates=rsi_candidates,
+            total_symbols=len(symbols),
+            tick_count=state["tick_count"],
+            trade_summary=trade_summary,
+        ))
+
+    # 히스토리는 짧게 보관 (최근 24시간 = 288개)
     state["history"].append({
         "time": now.isoformat(),
-        "rsi": rsi,
-        "price": mark_price,
-        "balance": balance,
-        "has_position": has_position or new_trade is not None,
+        "balance": balance_after,
+        "open_positions": len(state["positions"]),
+        "rsi_candidates": len(rsi_candidates),
+        "new_entries": len(new_entries),
+        "closures": len(closures),
+        "errors": len(errors),
     })
-    state["last_tick"] = now.isoformat()
-    state["last_rsi"] = rsi
-    state["last_price"] = mark_price
-    state["mode"] = mode
-    if balance > state.get("peak_balance", 0):
-        state["peak_balance"] = balance
+    if len(state["history"]) > 1000:
+        state["history"] = state["history"][-1000:]
 
     save_state(state_path, state)
 
-    if notification_text:
-        send_telegram_message(notification_text)
-
     return {
-        "rsi": rsi,
-        "price": mark_price,
-        "balance": balance,
-        "position_amt": position_amt,
-        "new_trade": new_trade,
+        "tick_count": state["tick_count"],
+        "balance": balance_after,
+        "open_positions": len(state["positions"]),
+        "total_symbols": len(symbols),
+        "new_entries": len(new_entries),
+        "closures": len(closures),
+        "errors": len(errors),
+        "rsi_candidates": len(rsi_candidates),
         "mode": mode,
     }
