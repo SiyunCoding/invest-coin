@@ -1,22 +1,25 @@
-# Futures 50x scalping 설정 — 멀티 코인 (RSI 5m > threshold → SHORT)
+# Futures scalping 설정 — 멀티 코인 (RSI 5m > threshold → SHORT)
 # Binance Futures Demo 엔드포인트: https://demo-fapi.binance.com
 
-demo: true                # Demo (가짜 돈). false로 바꾸면 실거래
-margin_type: CROSSED      # CROSSED or ISOLATED
-leverage: 50
-margin_usdt: 15           # 1회 진입 마진. 노셔널 = 15 × 50 = $750
-tp_profit_pct: 0.30       # 익절 = 마진 30% (≈ 가격 0.3~0.5% 변동)
+demo: true
+margin_type: CROSSED
+margin_usdt: 15           # 1회 진입 마진 (USDT)
+tp_profit_pct: 0.30       # 익절 = 마진 30%
 cushion_usdt: 2.0         # 수수료 + 슬리피지 안전 마진
 
+# === 레버리지 필터 ===
+# 각 코인의 max 레버리지가 [leverage_min, leverage_max] 범위 안인 코인만 진입.
+# 실제 사용하는 레버리지 = 그 코인의 max (범위 안에서).
+# 예: leverage_min=50, leverage_max=75 → BTC(125)/ETH(100) 제외, 알트만 50~75x로 진입.
+leverage_min: 50
+leverage_max: 75
+
 rsi_period: 14
-rsi_threshold: 80.0       # RSI > 80이면 진입 (강한 overbought → SHORT)
+rsi_threshold: 80.0       # RSI > 80이면 진입
 
-# symbols: 비워두면 자동으로 거래 중인 모든 USDT 무기한 선물 수집
-# (필요 시 명시: ["BTCUSDT", "ETHUSDT", ...])
+# symbols: 비워두면 자동으로 USDT 무기한 선물 전체 수집 (위 레버리지 필터 적용 후)
 symbols: []
-
-# 제외할 심볼 (e.g. 평소 안 잡고 싶은 거)
 exclude_symbols: []
 
-# 1시간마다 1번 헬스체크 알림 (5분 tick × 12 = 60분)
+# 헬스체크 알림 주기 (5분 tick × 12 = 1시간)
 heartbeat_every_n_ticks: 12

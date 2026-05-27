@@ -57,10 +57,12 @@ def main() -> int:
     state_path = ROOT / "data" / "futures_state.json"
 
     mode = "demo" if config.get("demo", True) else "MAINNET"
+    lev_min = config.get("leverage_min", config.get("leverage", 50))
+    lev_max = config.get("leverage_max", config.get("leverage", 50))
     boot_msg = (
         f"🟢 *선물 스캘퍼 시작* ({mode})\n"
-        f"• 종목: USDT 무기한 선물 전체 (자동)\n"
-        f"• 레버리지: `{config['leverage']}x` `{config['margin_type']}`\n"
+        f"• 종목: USDT 무기한 선물 중 max 레버리지 `{lev_min}~{lev_max}x` 코인만\n"
+        f"• 마진 모드: `{config['margin_type']}`\n"
         f"• 마진/회: `${config['margin_usdt']}` / 익절: 마진 `{int(config['tp_profit_pct']*100)}%`\n"
         f"• 신호: RSI(5m) > `{config['rsi_threshold']}` → SHORT\n"
         f"• 동시 포지션: 허용 (코인별 독립)\n"

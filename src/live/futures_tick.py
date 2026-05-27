@@ -142,6 +142,7 @@ def _format_heartbeat(
     total_symbols: int,
     tick_count: int,
     trade_summary: dict,
+    leverage_range: tuple[int, int] = (50, 75),
 ) -> str:
     pnl = balance - initial_balance
     pnl_pct = (pnl / initial_balance * 100) if initial_balance > 0 else 0.0
@@ -150,7 +151,7 @@ def _format_heartbeat(
         f"`{_kst_str()}` · tick #{tick_count}",
         "",
         f"💼 가용 마진: `${balance:,.2f}` (`{pnl:+,.2f}` / `{pnl_pct:+.2f}%`)",
-        f"📈 추적 심볼: `{total_symbols}` (USDT 무기한)",
+        f"📈 추적 심볼: `{total_symbols}` (max lev `{leverage_range[0]}~{leverage_range[1]}x`)",
         f"📦 오픈 포지션: `{len(positions)}`",
     ]
     if positions:
@@ -188,7 +189,10 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
     """멀티 심볼 Futures scalping tick 한 번."""
     now = datetime.now(timezone.utc)
     demo = bool(config.get("demo", True))
-    leverage = int(config["leverage"])
+    # 레버리지 범위 필터: 코인 max 레버리지가 [leverage_min, leverage_max] 안인 것만 진입
+    # 실제 사용 = 코인의 max (범위 안에서). 옛 'leverage' 키도 폴백 지원.
+    leverage_min = int(config.get("leverage_min", config.get("leverage", 50)))
+    leverage_max = int(config.get("leverage_max", config.get("leverage", 50)))
     margin_usdt = float(config["margin_usdt"])
     tp_profit_pct = float(config["tp_profit_pct"])
     cushion_usdt = float(config.get("cushion_usdt", 2.0))
@@ -211,17 +215,25 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
     last_symbols_fetch = state.get("last_symbols_fetch_ts", 0)
     symbols_cache = state.get("symbols_cache", [])
     max_lev_cache = state.get("max_leverage_map", {})
-    if explicit_symbols:
-        symbols = explicit_symbols
-        if not max_lev_cache:
-            max_lev_cache = get_max_leverage_map(client)
-            state["max_leverage_map"] = max_lev_cache
-    elif not symbols_cache or not max_lev_cache or (time.time() - last_symbols_fetch) > 3600:
-        symbols = list_usdt_perpetuals(client, exclude=exclude_symbols)
+    need_refresh = (
+        not symbols_cache or not max_lev_cache
+        or (time.time() - last_symbols_fetch) > 3600
+    )
+    if need_refresh:
+        all_symbols = (
+            explicit_symbols if explicit_symbols
+            else list_usdt_perpetuals(client, exclude=exclude_symbols)
+        )
         max_lev_cache = get_max_leverage_map(client)
+        # 레버리지 범위 필터 적용 — 코인 max가 [leverage_min, leverage_max] 안인 것만
+        symbols = [
+            s for s in all_symbols
+            if leverage_min <= max_lev_cache.get(s, 0) <= leverage_max
+        ]
         state["symbols_cache"] = symbols
         state["max_leverage_map"] = max_lev_cache
         state["last_symbols_fetch_ts"] = time.time()
+        state["leverage_filter"] = {"min": leverage_min, "max": leverage_max}
     else:
         symbols = symbols_cache
 
@@ -277,9 +289,9 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
             if balance_before < margin_usdt * 1.5:
                 continue
 
-            # 각 코인의 최대 레버리지에 맞춰 clamp (50x 미지원 코인 대응)
-            symbol_max_lev = int(max_lev_cache.get(symbol, leverage))
-            effective_lev = min(leverage, symbol_max_lev)
+            # 필터 통과한 코인이라 max가 [leverage_min, leverage_max] 안에 있음.
+            # 그 max 그대로 사용 (가장 공격적).
+            effective_lev = int(max_lev_cache.get(symbol, leverage_min))
 
             # 레버리지/마진 모드 1회 설정 (clamped 값 사용)
             if not state["leverage_initialized"].get(symbol):
@@ -385,6 +397,7 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
             total_symbols=len(symbols),
             tick_count=state["tick_count"],
             trade_summary=trade_summary,
+            leverage_range=(leverage_min, leverage_max),
         ))
 
     # 히스토리는 짧게 보관 (최근 24시간 = 288개)
