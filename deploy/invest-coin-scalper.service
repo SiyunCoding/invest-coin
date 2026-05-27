@@ -1,0 +1,20 @@
+[Unit]
+Description=Invest Coin - Binance Futures 50x Scalper Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/invest-coin
+EnvironmentFile=/home/ubuntu/invest-coin/.env
+ExecStart=/usr/bin/python3.11 -X utf8 /home/ubuntu/invest-coin/scripts/futures_scalper_loop.py
+Restart=always
+RestartSec=15
+StandardOutput=append:/home/ubuntu/invest-coin/logs/scalper.log
+StandardError=append:/home/ubuntu/invest-coin/logs/scalper.err
+# 5분 데몬이라 메모리 누수 방지용 일일 재시작
+RuntimeMaxSec=86400
+
+[Install]
+WantedBy=multi-user.target
