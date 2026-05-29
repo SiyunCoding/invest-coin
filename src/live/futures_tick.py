@@ -194,23 +194,25 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
         not symbols_cache or not max_lev_cache
         or (time.time() - last_symbols_fetch) > 3600
     )
+    runtime_blacklist = set(state.get("runtime_blacklist", []))
     if need_refresh:
         all_symbols = (
             explicit_symbols if explicit_symbols
             else list_usdt_perpetuals(client, exclude=exclude_symbols)
         )
         max_lev_cache = get_max_leverage_map(client)
-        # 레버리지 범위 필터 적용 — 코인 max가 [leverage_min, leverage_max] 안인 것만
+        # 레버리지 범위 필터 + 런타임 블랙리스트 (이전에 -1121/-4005 거부된 종목)
         symbols = [
             s for s in all_symbols
             if leverage_min <= max_lev_cache.get(s, 0) <= leverage_max
+            and s not in runtime_blacklist
         ]
         state["symbols_cache"] = symbols
         state["max_leverage_map"] = max_lev_cache
         state["last_symbols_fetch_ts"] = time.time()
         state["leverage_filter"] = {"min": leverage_min, "max": leverage_max}
     else:
-        symbols = symbols_cache
+        symbols = [s for s in symbols_cache if s not in runtime_blacklist]
 
     # 2) 잔고 + 전체 포지션 + 전체 mark price (총 3콜)
     balance_before = get_available_balance(client, "USDT")
@@ -301,6 +303,15 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
             except (BinanceAPIException, ValueError) as e:
                 code = getattr(e, "code", "VALUE_ERROR")
                 msg = getattr(e, "message", str(e))
+                # -1121 Invalid symbol / -4005 Quantity > max → 해당 심볼 영구 블랙리스트
+                # (다음 tick부터 시도 안 함 → 알림 폭탄 + state 트레이드 로그 폭증 방지)
+                if code in (-1121, -4005):
+                    runtime_blacklist = state.setdefault("runtime_blacklist", [])
+                    if symbol not in runtime_blacklist:
+                        runtime_blacklist.append(symbol)
+                    # 캐시에서도 제거
+                    if symbol in state.get("symbols_cache", []):
+                        state["symbols_cache"].remove(symbol)
                 errors.append({"symbol": symbol, "code": code, "message": str(msg)})
                 state["trades"].append({
                     "time": now.isoformat(), "type": "error", "symbol": symbol,

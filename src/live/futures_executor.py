@@ -118,19 +118,23 @@ def list_usdt_perpetuals(client: Client, exclude: list[str] | None = None) -> li
     """현재 거래 중인 모든 USDⓈ-M 무기한 선물 심볼.
 
     필터: contractType=PERPETUAL, status=TRADING, quoteAsset=USDT.
+    + 비-ASCII (한자/특수문자) 심볼 자동 제외 — Demo 플랫폼의 테스트 전용
+      종목들이 exchange_info엔 나오지만 실제 주문 시 -1121 Invalid symbol.
     (분기 만기물 / 정지/상폐 종목 / COIN-M 자동 제외)
     """
     exclude_set = set(exclude or [])
     info = client.futures_exchange_info()
     symbols = []
     for s in info["symbols"]:
+        sym = s["symbol"]
         if (
             s.get("contractType") == "PERPETUAL"
             and s.get("status") == "TRADING"
             and s.get("quoteAsset") == "USDT"
-            and s["symbol"] not in exclude_set
+            and sym.isascii()  # 테스트용 비-ASCII 심볼 제외
+            and sym not in exclude_set
         ):
-            symbols.append(s["symbol"])
+            symbols.append(sym)
     return sorted(symbols)
 
 
