@@ -75,6 +75,16 @@ def _phase_multiplier(months: pd.Series, mult_markup: float, mult_dist: float,
     return pd.Series(out, index=months.index, name="multiplier")
 
 
+def _resolve_sub_strategy(name: str | None, default_cls):
+    """이름으로 sub-strategy 클래스 조회. None이면 default. 순환 import 방지 위해 lazy."""
+    if name is None or name == "":
+        return default_cls
+    from . import REGISTRY  # lazy import
+    if name not in REGISTRY:
+        raise ValueError(f"Unknown sub-strategy: {name}. Available: {list(REGISTRY)}")
+    return REGISTRY[name].cls
+
+
 @dataclass
 class CycleAwareEnsemble(Strategy):
     # ADX 게이트 (price regime)
@@ -98,6 +108,9 @@ class CycleAwareEnsemble(Strategy):
     atr_pct_window: int = 252
     atr_risk_off_pct: float = 0.90
     atr_risk_off_scale: float = 0.5
+    # Sub-strategy 교체 (실험용). None/"" = 검증된 디폴트.
+    trend_strategy: str = ""  # default: DonchianATR
+    mr_strategy: str = ""     # default: ConnorsRSI
 
     name: str = "cycle_aware"
 
@@ -107,9 +120,11 @@ class CycleAwareEnsemble(Strategy):
         if missing:
             raise ValueError(f"OHLCV missing columns: {missing}")
 
-        # 1. Sub-strategy 신호 (둘 다 디폴트 파라미터 사용)
-        trend_sig = DonchianATR().generate_signals(ohlcv).reindex(ohlcv.index).fillna(0.0)
-        mr_sig = ConnorsRSI().generate_signals(ohlcv).reindex(ohlcv.index).fillna(0.0)
+        # 1. Sub-strategy 신호 (디폴트 또는 주입된 전략)
+        trend_cls = _resolve_sub_strategy(self.trend_strategy, DonchianATR)
+        mr_cls = _resolve_sub_strategy(self.mr_strategy, ConnorsRSI)
+        trend_sig = trend_cls().generate_signals(ohlcv).reindex(ohlcv.index).fillna(0.0)
+        mr_sig = mr_cls().generate_signals(ohlcv).reindex(ohlcv.index).fillna(0.0)
 
         # 2. Price regime weight (ADX soft weighting)
         adx_series = adx(ohlcv, self.adx_period)
