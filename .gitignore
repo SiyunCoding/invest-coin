@@ -45,3 +45,5 @@ logs/
 .claude/settings.local.json
 # Project CLAUDE.md (개인 워크플로우 — global ~/.claude/CLAUDE.md와 중복)
 CLAUDE.md
+# AGENTS.md (Claude Code 도구가 자동 생성 — repo에 commit 안 함)
+AGENTS.md

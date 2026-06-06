@@ -22,8 +22,19 @@ import requests
 TELEGRAM_API = "https://api.telegram.org"
 
 
+def _post_message(url: str, chat_id: str, text: str, parse_mode: str | None) -> requests.Response:
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "disable_web_page_preview": True,
+    }
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    return requests.post(url, json=payload, timeout=10)
+
+
 def send_telegram_message(text: str, parse_mode: str = "Markdown") -> bool:
-    """Telegram chat으로 메시지 전송.
+    """Telegram chat으로 메시지 전송. Markdown 파싱 실패 시 plain text 폴백.
 
     Returns:
         True 전송 성공, False 환경 변수 없음 또는 전송 실패 (예외는 안 던짐).
@@ -34,18 +45,36 @@ def send_telegram_message(text: str, parse_mode: str = "Markdown") -> bool:
         return False
 
     url = f"{TELEGRAM_API}/bot{token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": parse_mode,
-        "disable_web_page_preview": True,
-    }
     try:
-        resp = requests.post(url, json=payload, timeout=10)
-        resp.raise_for_status()
-        return True
+        resp = _post_message(url, chat_id, text, parse_mode)
+        if resp.status_code == 200:
+            return True
+        # 400 = 보통 Markdown 파싱 에러. 실제 에러 description 로깅 + plain text 재시도.
+        if resp.status_code == 400 and parse_mode:
+            try:
+                err_body = resp.json()
+                desc = err_body.get("description", resp.text[:200])
+            except Exception:
+                desc = resp.text[:200]
+            print(f"[telegram] markdown parse failed ({desc}) — retry as plain text")
+            resp2 = _post_message(url, chat_id, text, None)
+            if resp2.status_code == 200:
+                return True
+            try:
+                err2 = resp2.json().get("description", resp2.text[:200])
+            except Exception:
+                err2 = resp2.text[:200]
+            print(f"[telegram] plain text also failed: {err2}")
+            return False
+        # 다른 status code
+        try:
+            err = resp.json().get("description", resp.text[:200])
+        except Exception:
+            err = resp.text[:200]
+        print(f"[telegram] send failed: HTTP {resp.status_code} {err}")
+        return False
     except Exception as e:
-        print(f"[telegram] send failed: {e}")
+        print(f"[telegram] send failed (network): {e}")
         return False
 
 
