@@ -88,8 +88,11 @@ def main() -> int:
             tb = traceback.format_exc()
             print(f"[scalper/{mode}] ERROR on tick #{tick_count}: {e}\n{tb}", file=sys.stderr)
             try:
-                # 너무 길면 Telegram이 자름 — 마지막 500자만
-                err_msg = f"⚠️ *선물 스캘퍼 에러* (tick #{tick_count})\n```\n{str(e)[:500]}\n```"
+                # 트리플 백틱은 Markdown v1 미지원 → 단일 백틱 (legacy code style)
+                err_msg = (
+                    f"⚠️ *선물 스캘퍼 에러* (tick #{tick_count})\n"
+                    f"`{str(e)[:400]}`"
+                )
                 send_telegram_message(err_msg)
             except Exception:
                 pass

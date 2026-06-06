@@ -303,13 +303,14 @@ def run_futures_tick(state_path: Path, config: dict) -> dict:
             except (BinanceAPIException, ValueError) as e:
                 code = getattr(e, "code", "VALUE_ERROR")
                 msg = getattr(e, "message", str(e))
-                # -1121 Invalid symbol / -4005 Quantity > max → 해당 심볼 영구 블랙리스트
-                # (다음 tick부터 시도 안 함 → 알림 폭탄 + state 트레이드 로그 폭증 방지)
-                if code in (-1121, -4005):
+                # 영구 거부될 심볼 자동 블랙리스트:
+                # -1121 Invalid symbol (가짜/테스트 종목)
+                # -4005 Quantity > max (저단가 코인)
+                # -1109 Invalid account (특정 심볼이 demo 계정에 미허용)
+                if code in (-1121, -4005, -1109):
                     runtime_blacklist = state.setdefault("runtime_blacklist", [])
                     if symbol not in runtime_blacklist:
                         runtime_blacklist.append(symbol)
-                    # 캐시에서도 제거
                     if symbol in state.get("symbols_cache", []):
                         state["symbols_cache"].remove(symbol)
                 errors.append({"symbol": symbol, "code": code, "message": str(msg)})

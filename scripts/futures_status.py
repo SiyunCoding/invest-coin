@@ -61,6 +61,30 @@ def main() -> int:
             elif tp == "error":
                 print(f"  [{time_str}] ERROR  {sym} code={t.get('error_code')} {str(t.get('error_message', ''))[:60]}")
 
+    # 에러 코드별 분포
+    errs = [t for t in trades if t.get("type") == "error"]
+    if errs:
+        from collections import Counter
+        print()
+        print(f"=== 누적 에러 {len(errs)}건 코드별 분포 ===")
+        by_code = Counter(t.get("error_code") for t in errs)
+        for code, n in by_code.most_common():
+            print(f"  code={code}: {n}건")
+        # 에러 심볼 TOP 10
+        by_sym = Counter(t.get("symbol") for t in errs)
+        print(f"=== 에러 심볼 TOP 10 ===")
+        for sym, n in by_sym.most_common(10):
+            print(f"  {sym}: {n}건")
+
+    # 런타임 블랙리스트
+    bl = s.get("runtime_blacklist", [])
+    if bl:
+        print()
+        print(f"=== 런타임 블랙리스트 {len(bl)}개 ===")
+        print("  " + ", ".join(bl[:20]))
+        if len(bl) > 20:
+            print(f"  ...외 {len(bl)-20}개")
+
     return 0
 
 
