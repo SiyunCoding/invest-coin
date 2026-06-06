@@ -103,6 +103,17 @@ def format_tick_notification(mode: str, result: dict) -> str:
     header = f"{mode_label} · {_kst_str()}"
     trade = result.get("trade")
 
+    # CASE 0: 안전장치 발동 (가장 중요 — 매매 정지 상태)
+    if result.get("halted"):
+        reasons = result.get("halted_reasons", [])
+        reason_lines = "\n".join(f"• {r}" for r in reasons)
+        return (
+            f"🛑 *매매 정지* ({header})\n"
+            f"{reason_lines}\n\n"
+            f"💼 총자산: `${float(result.get('equity', 0)):,.2f}`\n"
+            f"🎯 신호: `{float(result.get('raw_signal', 0)):.3f}`"
+        )
+
     # CASE 1: 변함없음 (거래 없음)
     # 헬스체크 역할: 신호/가격/총자산이 매일 갱신되는지 확인 가능.
     if trade is None:

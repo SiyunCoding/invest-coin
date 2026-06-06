@@ -30,6 +30,13 @@ DEFAULT_CONFIG = {
     "fee_rate": 0.001,              # 표시용 (실제 fee는 Binance가 적용)
     "slippage_rate": 0.0005,
     "lookback_days": 730,
+    # 안전장치 (mainnet 운영 시 특히 중요)
+    "safety": {
+        "daily_loss_limit_pct": 0.05,    # 하루에 -5% 도달 시 자동 정지
+        "max_position_weight": 1.0,       # 신호 클램프 상한 (1.0 = 100% 허용)
+        "max_signal_value": 1.0,          # 이상 신호 차단 임계값
+        "halt_file": ".halt",             # 이 파일 존재 시 모든 매매 중지
+    },
 }
 
 

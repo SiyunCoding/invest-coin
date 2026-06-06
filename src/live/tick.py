@@ -5,6 +5,12 @@
 - 매매 실행: Binance API 시장가 주문
 - 잔고 / 가격: 매 tick마다 Binance에서 조회 (source of truth)
 - 거래 로그 + history: state.json에 저장 (대시보드 + 텔레그램 알림용)
+
+안전장치 (mainnet에서 특히 중요):
+- daily_loss_limit_pct: 하루 손실이 자본의 이 %를 넘으면 자동 정지
+- max_position_weight: 한 번에 사는 비율 상한
+- max_signal_value: 신호가 이상하게 크면 무시 (전략 버그/데이터 오염 방지)
+- halt 파일: ~/invest-coin/.halt 파일이 있으면 모든 매매 중지 (수동 비상정지)
 """
 from __future__ import annotations
 
@@ -24,6 +30,67 @@ from .executor import (
     rebalance_to_target,
     split_symbol,
 )
+
+
+# 안전장치 디폴트 — config에서 override 가능
+DEFAULT_SAFETY = {
+    "daily_loss_limit_pct": 0.05,   # 일일 -5% 도달 시 자동 정지
+    "max_position_weight": 1.0,     # 신호를 이 비율로 클램프 (1.0 = 100% 허용)
+    "max_signal_value": 1.0,        # 신호 > 이 값이면 이상 신호로 간주 → 무시
+    "halt_file": ".halt",           # 이 파일 존재 시 모든 매매 중지
+}
+
+
+def _check_halt_file(root_dir: Path, halt_filename: str) -> bool:
+    """halt 파일이 있으면 True. 수동 비상정지용."""
+    return (root_dir / halt_filename).exists()
+
+
+def _is_signal_anomalous(signal: float, max_val: float) -> bool:
+    """신호가 비정상 범위면 True. NaN, 음수, 너무 큰 값 차단."""
+    if signal != signal:  # NaN check
+        return True
+    if signal < 0 or signal > max_val:
+        return True
+    return False
+
+
+def _today_str(now: datetime) -> str:
+    """UTC 기준 YYYY-MM-DD 문자열."""
+    return now.strftime("%Y-%m-%d")
+
+
+def _check_daily_loss_limit(state: dict, current_equity: float, now: datetime,
+                             loss_limit_pct: float) -> tuple[bool, dict]:
+    """일일 손실이 한도 넘었는지 체크 + 일일 트래커 갱신.
+
+    Returns: (halted, tracker_dict). halted=True면 매매 정지.
+    """
+    today = _today_str(now)
+    tracker = state.get("daily_loss_tracker") or {}
+
+    # 날짜 바뀌었으면 트래커 리셋
+    if tracker.get("date") != today:
+        tracker = {
+            "date": today,
+            "start_equity": current_equity,
+            "halted_today": False,
+        }
+
+    if tracker.get("halted_today"):
+        return True, tracker
+
+    start_eq = float(tracker.get("start_equity", current_equity))
+    if start_eq <= 0:
+        return False, tracker
+
+    pnl_pct = (current_equity - start_eq) / start_eq
+    if pnl_pct <= -abs(loss_limit_pct):
+        tracker["halted_today"] = True
+        tracker["halted_at"] = now.isoformat()
+        tracker["halted_at_equity"] = current_equity
+        return True, tracker
+    return False, tracker
 
 
 def _init_live_state(config: dict, started_at: str, initial: float) -> dict:
@@ -79,6 +146,10 @@ def run_live_tick(
     symbol = config["symbol"]
     base, quote = split_symbol(symbol)
 
+    # 안전장치 설정 — config.safety로 override 가능
+    safety = {**DEFAULT_SAFETY, **config.get("safety", {})}
+    root_dir = Path(cache_dir).resolve().parent if isinstance(cache_dir, (str, Path)) else Path.cwd()
+
     # 0. Binance 현 상태 먼저 조회 (state 초기화 시 사용)
     base_qty, quote_qty = get_balances(client, base, quote)
     current_price = get_current_price(client, symbol)
@@ -87,6 +158,15 @@ def run_live_tick(
     state = load_state(state_path)
     if state is None:
         state = _init_live_state(config, now.isoformat(), equity)
+
+    # 안전장치 1: 수동 비상정지 파일 체크
+    halt_by_file = _check_halt_file(root_dir, safety["halt_file"])
+
+    # 안전장치 2: 일일 손실 한도 체크
+    halt_by_daily_loss, daily_tracker = _check_daily_loss_limit(
+        state, equity, now, safety["daily_loss_limit_pct"]
+    )
+    state["daily_loss_tracker"] = daily_tracker
 
     # 1. OHLCV → 신호
     ohlcv = load_ohlcv(
@@ -101,13 +181,32 @@ def run_live_tick(
     meta = REGISTRY[config["strategy"]]
     strategy = meta.cls(**config.get("strategy_params", {}))
     signals = strategy.generate_signals(ohlcv)
-    latest_signal = float(signals.iloc[-1])
+    raw_signal = float(signals.iloc[-1])
     latest_bar_time = ohlcv.index[-1].isoformat()
+
+    # 안전장치 3: 신호 이상치 체크
+    signal_anomalous = _is_signal_anomalous(raw_signal, safety["max_signal_value"])
+
+    # 안전장치 4: 포지션 한도 클램프 (신호가 정상일 때만)
+    latest_signal = raw_signal if not signal_anomalous else 0.0
+    latest_signal = max(0.0, min(latest_signal, safety["max_position_weight"]))
 
     # 2. 같은 봉 두 번 처리 방지
     already_processed = state.get("last_bar_time") == latest_bar_time
+
+    # 안전장치 통합 — 어떤 이유로든 halt면 매매 안 함
+    halted_reasons = []
+    if halt_by_file:
+        halted_reasons.append(f"halt 파일 존재 ({safety['halt_file']})")
+    if halt_by_daily_loss:
+        loss_pct = safety["daily_loss_limit_pct"] * 100
+        halted_reasons.append(f"일일 손실 한도 -{loss_pct:.1f}% 도달")
+    if signal_anomalous:
+        halted_reasons.append(f"이상 신호값 {raw_signal:.4f} (허용 [0, {safety['max_signal_value']}])")
+    halted = bool(halted_reasons)
+
     trade = None
-    if not already_processed:
+    if not already_processed and not halted:
         try:
             trade = rebalance_to_target(client, symbol, latest_signal)
         except BinanceAPIException as e:
@@ -124,6 +223,16 @@ def run_live_tick(
             trade.setdefault("signal", latest_signal)
             trade.setdefault("bar_time", latest_bar_time)
             state["trades"].append(trade)
+    elif halted and not already_processed:
+        # 안전장치 발동 — 거래 안 함 + state에 기록
+        state["trades"].append({
+            "time": now.isoformat(),
+            "side": "halted",
+            "reasons": halted_reasons,
+            "signal": latest_signal,
+            "raw_signal": raw_signal,
+            "bar_time": latest_bar_time,
+        })
 
     # 3. 거래 후 Binance 잔고 재조회 (source of truth)
     base_qty, quote_qty = get_balances(client, base, quote)
@@ -159,6 +268,7 @@ def run_live_tick(
     result = {
         "trade": trade,
         "signal": latest_signal,
+        "raw_signal": raw_signal,
         "price": current_price,
         "equity": equity,
         "cash": quote_qty,
@@ -166,6 +276,8 @@ def run_live_tick(
         "bar_time": latest_bar_time,
         "duplicate_bar": already_processed,
         "mode": mode,
+        "halted": halted,
+        "halted_reasons": halted_reasons,
     }
     send_telegram_message(format_tick_notification(mode, result))
     return result
