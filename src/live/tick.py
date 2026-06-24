@@ -156,6 +156,18 @@ def run_live_tick(
     equity = quote_qty + base_qty * current_price
 
     state = load_state(state_path)
+    # 모드 변경 (testnet ↔ mainnet) 감지 → 옛 state는 백업, fresh init.
+    # 이유: testnet의 $88k 자산이 mainnet $100 자산과 섞이면 daily_loss_tracker가
+    # 즉시 -99% 손실로 계산 → 첫 tick부터 halt 발동.
+    current_mode = "testnet" if testnet else "mainnet"
+    if state is not None and state.get("mode") not in (None, current_mode):
+        old_mode = state.get("mode", "unknown")
+        backup_path = state_path.with_name(
+            f"{state_path.stem}_{old_mode}_{now.strftime('%Y%m%d_%H%M%S')}.json.bak"
+        )
+        save_state(backup_path, state)
+        print(f"[live] mode change {old_mode} → {current_mode}, archived old state to {backup_path.name}")
+        state = None
     if state is None:
         state = _init_live_state(config, now.isoformat(), equity)
 

@@ -1,8 +1,9 @@
-name: Live Trading (Testnet) Daily Tick
+name: Live Trading Daily Tick
 
 # 매일 UTC 00:35 (= KST 09:35). 어제 마감 봉 기준으로 cycle_aware 신호 계산.
 # Binance가 GHA 호스팅 러너 IP를 차단해서 self-hosted runner (Oracle Cloud 춘천) 사용.
 # Runner: invest-coin-runner @ Oracle Cloud ap-chuncheon-1
+# config/live_trading.yaml의 testnet 플래그가 testnet/mainnet 결정.
 on:
   schedule:
     - cron: '35 0 * * *'
@@ -26,8 +27,11 @@ jobs:
 
       - name: Run live trading tick
         env:
+          # testnet 키와 mainnet 키 둘 다 전달 — config의 testnet 플래그가 어느 쪽 쓸지 결정
           BINANCE_TESTNET_API_KEY: ${{ secrets.BINANCE_TESTNET_API_KEY }}
           BINANCE_TESTNET_API_SECRET: ${{ secrets.BINANCE_TESTNET_API_SECRET }}
+          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
+          BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python3.11 -X utf8 scripts/live_tick.py
