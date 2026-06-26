@@ -62,19 +62,19 @@
 
 <header>
   <h1>📊 코인 자동매매<span class="badge badge-mainnet">실거래</span></h1>
-  <div class="updated">업데이트 2026-06-25 13:48:01 KST</div>
+  <div class="updated">업데이트 2026-06-26 13:52:27 KST</div>
 </header>
 
 <div class="grid">
   <div class="card">
     <div class="card-label">💰 총자산</div>
     <div class="card-value">$0.00</div>
-    <div class="card-sub gain">▲ $0.00 (+0.00%)</div>
+    <div class="card-sub loss">▼ $0.00 (-100.00%)</div>
   </div>
   <div class="card">
     <div class="card-label">📈 BTCUSDT 평가금액</div>
     <div class="card-value">$0.00</div>
-    <div class="card-sub">수량 0 · 현재가 $61,022.01</div>
+    <div class="card-sub">수량 0 · 현재가 $59,908.00</div>
   </div>
   <div class="card">
     <div class="card-label">💵 예수금</div>
@@ -83,13 +83,13 @@
   </div>
   <div class="card">
     <div class="card-label">📉 MDD</div>
-    <div class="card-value loss">+0.00%</div>
+    <div class="card-value loss">-100.00%</div>
     <div class="card-sub">peak $0.00</div>
   </div>
   <div class="card">
     <div class="card-label">🎯 현재 신호 (cycle_aware)</div>
     <div class="card-value">0.000</div>
-    <div class="card-sub">기준 봉 2026-06-24 09:00:00 KST</div>
+    <div class="card-sub">기준 봉 2026-06-25 09:00:00 KST</div>
     <div class="signal-bar"><div class="signal-fill" style="width:0.0%"></div></div>
   </div>
 </div>
@@ -145,7 +145,7 @@
 </div>
 
 <script>
-const pieData = [{"label": "BTCUSDT", "value": 0.0}, {"label": "\ud604\uae08", "value": 2.703e-05}];
+const pieData = [{"label": "BTCUSDT", "value": 0.0}, {"label": "\ud604\uae08", "value": 0.0}];
 new Chart(document.getElementById('pieChart').getContext('2d'), {
   type: 'doughnut',
   data: {
@@ -174,7 +174,7 @@ new Chart(document.getElementById('pieChart').getContext('2d'), {
   }
 });
 
-const equityData = [{"x": "2026-06-25T04:48:01.448175+00:00", "y": 2.703e-05}];
+const equityData = [{"x": "2026-06-25T04:48:01.448175+00:00", "y": 2.703e-05}, {"x": "2026-06-26T04:52:27.638452+00:00", "y": 0.0}];
 new Chart(document.getElementById('equityChart').getContext('2d'), {
   type: 'line',
   data: {
