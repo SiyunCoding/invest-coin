@@ -4,19 +4,19 @@
     "interval": "1d",
     "strategy": "cycle_aware",
     "strategy_params": {},
-    "testnet": false,
+    "testnet": true,
     "fee_rate": 0.001,
     "slippage_rate": 0.0005,
     "lookback_days": 730,
     "safety": {
-      "daily_loss_limit_pct": 0.03,
+      "daily_loss_limit_pct": 0.05,
       "max_position_weight": 1.0,
       "max_signal_value": 1.0,
       "halt_file": ".halt"
     },
-    "initial_capital": 2.703e-05
+    "initial_capital": 73804.5
   },
-  "cash": 337.02830866,
+  "cash": 73804.5,
   "position": {
     "qty": 0.0,
     "avg_cost": 0.0
@@ -24,43 +24,25 @@
   "trades": [],
   "history": [
     {
-      "time": "2026-06-25T04:48:01.448175+00:00",
-      "bar_time": "2026-06-24T00:00:00+00:00",
-      "price": 61022.01,
+      "time": "2026-06-28T05:05:29.611549+00:00",
+      "bar_time": "2026-06-27T00:00:00+00:00",
+      "price": 59986.39,
       "signal": 0.0,
       "position_value": 0.0,
-      "cash": 2.703e-05,
-      "equity": 2.703e-05
-    },
-    {
-      "time": "2026-06-26T04:52:27.638452+00:00",
-      "bar_time": "2026-06-25T00:00:00+00:00",
-      "price": 59908.0,
-      "signal": 0.0,
-      "position_value": 0.0,
-      "cash": 0.0,
-      "equity": 0.0
-    },
-    {
-      "time": "2026-06-27T04:37:14.934223+00:00",
-      "bar_time": "2026-06-26T00:00:00+00:00",
-      "price": 60374.94,
-      "signal": 0.0,
-      "position_value": 0.0,
-      "cash": 337.02830866,
-      "equity": 337.02830866
+      "cash": 73804.5,
+      "equity": 73804.5
     }
   ],
-  "peak_equity": 337.02830866,
-  "started_at": "2026-06-25T04:48:01.448175+00:00",
-  "last_tick": "2026-06-27T04:37:14.934223+00:00",
-  "last_price": 60374.94,
+  "peak_equity": 73804.5,
+  "started_at": "2026-06-28T05:05:29.611549+00:00",
+  "last_tick": "2026-06-28T05:05:29.611549+00:00",
+  "last_price": 59986.39,
   "last_signal": 0.0,
-  "last_bar_time": "2026-06-26T00:00:00+00:00",
-  "mode": "mainnet",
+  "last_bar_time": "2026-06-27T00:00:00+00:00",
+  "mode": "testnet",
   "daily_loss_tracker": {
-    "date": "2026-06-27",
-    "start_equity": 337.02830866,
+    "date": "2026-06-28",
+    "start_equity": 73804.5,
     "halted_today": false
   }
 }
