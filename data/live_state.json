@@ -433,17 +433,26 @@
       "position_value": 0.0,
       "cash": 74530.63,
       "equity": 74530.63
+    },
+    {
+      "time": "2026-08-11T02:36:16.853825+00:00",
+      "bar_time": "2026-08-10T00:00:00+00:00",
+      "price": 64034.44,
+      "signal": 0.0,
+      "position_value": 0.0,
+      "cash": 74530.63,
+      "equity": 74530.63
     }
   ],
   "peak_equity": 74530.63,
   "started_at": "2026-06-28T05:05:29.611549+00:00",
-  "last_tick": "2026-08-10T02:53:51.797380+00:00",
-  "last_price": 65088.01,
+  "last_tick": "2026-08-11T02:36:16.853825+00:00",
+  "last_price": 64034.44,
   "last_signal": 0.0,
-  "last_bar_time": "2026-08-09T00:00:00+00:00",
+  "last_bar_time": "2026-08-10T00:00:00+00:00",
   "mode": "testnet",
   "daily_loss_tracker": {
-    "date": "2026-08-10",
+    "date": "2026-08-11",
     "start_equity": 74530.63,
     "halted_today": false
   }
