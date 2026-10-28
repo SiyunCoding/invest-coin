@@ -16,10 +16,10 @@
     },
     "initial_capital": 73804.5
   },
-  "cash": 32958.6572893,
+  "cash": 93007.5711893,
   "position": {
-    "qty": 0.74194,
-    "avg_cost": 80122.97514691214
+    "qty": 0.0,
+    "avg_cost": 0.0
   },
   "trades": [
     {
@@ -525,6 +525,20 @@
       "symbol": "BTCUSDT",
       "signal": 0.6422915581994529,
       "bar_time": "2026-10-26T00:00:00+00:00"
+    },
+    {
+      "time": "2026-10-28T06:11:14.345000+00:00",
+      "side": "sell",
+      "qty": 0.74194,
+      "price": 80935.0,
+      "value": 60048.91390000001,
+      "fee": 0.0,
+      "fee_asset": "USDT",
+      "order_id": 7985680,
+      "status": "FILLED",
+      "symbol": "BTCUSDT",
+      "signal": 0.0,
+      "bar_time": "2026-10-27T00:00:00+00:00"
     }
   ],
   "history": [
@@ -1607,18 +1621,27 @@
       "position_value": 59177.616661,
       "cash": 32958.6572893,
       "equity": 92136.2739503
+    },
+    {
+      "time": "2026-10-28T06:11:13.249886+00:00",
+      "bar_time": "2026-10-27T00:00:00+00:00",
+      "price": 80935.0,
+      "signal": 0.0,
+      "position_value": 0.0,
+      "cash": 93007.5711893,
+      "equity": 93007.5711893
     }
   ],
   "peak_equity": 93928.12314,
   "started_at": "2026-06-28T05:05:29.611549+00:00",
-  "last_tick": "2026-10-27T05:28:57.734827+00:00",
-  "last_price": 79760.65,
-  "last_signal": 0.6422915581994529,
-  "last_bar_time": "2026-10-26T00:00:00+00:00",
+  "last_tick": "2026-10-28T06:11:13.249886+00:00",
+  "last_price": 80935.0,
+  "last_signal": 0.0,
+  "last_bar_time": "2026-10-27T00:00:00+00:00",
   "mode": "testnet",
   "daily_loss_tracker": {
-    "date": "2026-10-27",
-    "start_equity": 92156.07124779999,
+    "date": "2026-10-28",
+    "start_equity": 93007.57860869999,
     "halted_today": false
   }
 }
