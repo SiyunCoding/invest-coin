@@ -1,0 +1,36 @@
+name: Live Tick Watchdog
+
+# 매매 tick 이 아예 안 돌았는지 감시 (Oracle 서버 / self-hosted runner 다운 대비).
+# GitHub hosted runner 에서 실행 — Binance 접근 불필요, 마지막 "live tick" 커밋 시각만 확인.
+# 30시간 넘게 tick 커밋이 없으면 Telegram 경보.
+on:
+  schedule:
+    - cron: '0 12 * * *'   # 매일 UTC 12:00 (KST 21:00) — 평소 tick(UTC 05~06시) 이후
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+
+      - name: Check last live tick
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          last=$(git log -1 --grep='^live tick' --format=%ct)
+          now=$(date +%s)
+          age_h=$(( (now - ${last:-0}) / 3600 ))
+          echo "last live tick ${age_h}h ago"
+          if [ "$age_h" -ge 30 ] && [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+              --data-urlencode "text=⏰ 매매 tick 이 ${age_h}시간째 없음. Oracle 서버 또는 GitHub self-hosted runner 상태 확인 필요." > /dev/null
+          fi

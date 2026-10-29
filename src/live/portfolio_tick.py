@@ -8,7 +8,9 @@
   5. 안전장치 → 매도 먼저, 매수 나중 → state / 대시보드 / Telegram
 
 안전장치:
-  - halt 파일: 모든 주문 중지 (수동 비상정지)
+  - halt 파일: 모든 주문 중지 (수동 비상정지). 두 곳 중 하나라도 있으면 발동:
+      · 저장소 루트의 .halt (git 에 커밋된 경우 — GitHub 웹에서 파일 추가로도 가능)
+      · 서버 홈의 ~/.invest-coin.halt (러너 checkout 의 git clean 에 지워지지 않음)
   - 손실 한도: 직전 tick 대비 -daily_loss_limit_pct 이하면 매수만 막음 (청산/축소는 허용)
   - 이상 목표: NaN/음수/총합>1 이면 주문 중지
   - 같은 봉 재처리 방지 (last_bar_time)
@@ -39,6 +41,15 @@ DEFAULT_SAFETY = {
     "daily_loss_limit_pct": 0.05,
     "halt_file": ".halt",
 }
+HOME_HALT_FILE = Path.home() / ".invest-coin.halt"
+
+
+def _halt_requested(root_dir: Path, halt_file: str) -> str | None:
+    """비상정지 파일 경로 (없으면 None). 러너 작업 폴더는 매 실행 git clean 되므로 홈 경로도 본다."""
+    for path in (root_dir / halt_file, HOME_HALT_FILE):
+        if path.exists():
+            return str(path)
+    return None
 
 
 # ---------------- 데이터 ----------------
@@ -181,8 +192,9 @@ def run_portfolio_tick(state_path: Path, dashboard_path: Path, config: dict,
 
     # 6) 안전장치
     reasons, buy_block = [], []
-    if (root_dir / safety["halt_file"]).exists():
-        reasons.append(f"halt 파일 존재 ({safety['halt_file']})")
+    halt_path = _halt_requested(root_dir, safety["halt_file"])
+    if halt_path:
+        reasons.append(f"halt 파일 존재 ({halt_path})")
     if any(math.isnan(w) or w < 0 for w in targets.values()) or sum(targets.values()) > 1.0 + 1e-6:
         reasons.append(f"이상 목표 비중 {targets}")
     if state["history"] and prev_equity > 0:

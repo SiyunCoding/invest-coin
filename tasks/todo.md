@@ -104,8 +104,11 @@
 
 ### 남은 일
 - [ ] testnet 2~4주 운영: 월말 유니버스 교체 1회 이상, 매도→매수 순서, testnet 미지원 종목 처리 확인
-- [ ] 선물 스캘퍼 중단 (서버에서 `sudo systemctl stop invest-coin-scalper && sudo systemctl disable invest-coin-scalper`) — 손익분기 승률 80~82% > 랜덤워크 승률 67~77%
-- [ ] mainnet 전 자본 규모 결정 ($3,000 미만이면 BTC 단독 운용)
+- [x] 선물 스캘퍼 중단 (2026-10-29 서버에서 stop + disable 확인. 최종 demo 성과 +$65 / 진입 13회, 6월 초 이후 사실상 미동작)
+- [x] PR #1 머지 + testnet 첫 tick 검증 (2026-10-29: 10종목 유니버스, 매도 1 → 매수 6, 목표 비중 일치)
+- [x] 운영 감시: 워크플로우 실패 시 Telegram 경보, watchdog (30시간 tick 없으면 경보)
+- [x] 비상정지 버그 수정: 러너 checkout 의 git clean 이 .halt 를 지워 작동 안 하던 문제 → ~/.invest-coin.halt 도 확인
+- [ ] mainnet 전 자본 규모 결정 ($3,000 미만이면 BTC 단독 운용) → config/live_trading.example.yaml 참고
 - [ ] (선택) mainnet 에서 유휴 USDT Simple Earn 연동 검토 (APR ~3.3%, 백테스트 Sharpe 1.14 → 1.26)
 
 ## 🔮 Phase 5 — 실거래 (Phase 4 통과 후)

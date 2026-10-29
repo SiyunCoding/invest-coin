@@ -188,6 +188,7 @@ def tick_env(tmp_path, monkeypatch):
     monkeypatch.setattr(pt, "_daily", lambda sym, cache_dir, lookback: data[sym])
     monkeypatch.setattr(pt, "_candidate_symbols", lambda pool: list(data))
     monkeypatch.setattr(pt, "send_telegram_message", lambda text: True)
+    monkeypatch.setattr(pt, "HOME_HALT_FILE", tmp_path / "home" / ".invest-coin.halt")
     config = {"testnet": True, "min_equity_for_alts": 3000, "trend_rotation": {"alt_slots": 3},
               "safety": {"daily_loss_limit_pct": 0.05, "halt_file": ".halt"}}
     paths = (tmp_path / "data" / "live_state.json", tmp_path / "docs" / "dash.html", tmp_path / "data")
@@ -224,6 +225,15 @@ def test_tick_halt_file_blocks_orders(tick_env):
     pt, client, config, (state_path, dash_path, cache_dir) = tick_env
     (cache_dir.parent / ".halt").parent.mkdir(parents=True, exist_ok=True)
     (cache_dir.parent / ".halt").write_text("stop")
+    res = pt.run_portfolio_tick(state_path, dash_path, config, cache_dir)
+    assert res["halted"] and not client.orders
+
+
+def test_tick_home_halt_file_blocks_orders(tick_env):
+    """러너 작업 폴더는 매번 git clean 되므로 서버 홈의 halt 파일도 인식해야 함."""
+    pt, client, config, (state_path, dash_path, cache_dir) = tick_env
+    pt.HOME_HALT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    pt.HOME_HALT_FILE.write_text("stop")
     res = pt.run_portfolio_tick(state_path, dash_path, config, cache_dir)
     assert res["halted"] and not client.orders
 
