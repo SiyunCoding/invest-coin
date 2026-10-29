@@ -84,10 +84,34 @@
 - [ ] state.json + dashboard.html 매일 자동 commit 정상
 - [ ] cycle_aware 신호가 백테스트와 동일하게 계산됨
 
+## ✅ Phase 4.6 — 전략 교체: cycle_aware → Trend Rotation (2026-10-29)
+
+### 조사·검증
+- [x] 서브에이전트 조사 2라운드 (추세/평균회귀/국면/반감기/비용/사이징/멀티코인/현금수익/전체 문헌) + 교차검증 2회 (출처 39건, 날조 0, 부분오류 7건 정정)
+- [x] cycle_aware 진단: 구성요소 ablation (반감기·ATR 무효), 파라미터 섭동 Sharpe 0.07~1.17 → 과적합 판정
+- [x] testnet 성과 왜곡 발견: 잔고 리셋으로 외부 자금 ~$22.8k 유입 → 실제 전략 성과 약 −5% (표면 +26%)
+- [x] Combo(Donchian 앙상블) 재현 → 약점 진단 (상승장 참여 부족 / 횡보 손실 / 긴 낙폭 / 유휴 현금)
+- [x] 사이징 대안 5종 (장기변동성·조건부·하방·VP·코어) → BTC 단독에선 Sharpe 개선 없음 (수익↔낙폭 교환일 뿐)
+- [x] 상장폐지 195개 포함 681개 페어 수집, 액면변경/심볼 재사용 9건 정제 → 생존편향 제거 (15코인 Sharpe 1.35 → 실제 1.05)
+- [x] BTC 50% + 알트 상위10 50% 확정: 섭동 Sharpe 1.15~1.27, 비용 스트레스 통과, 튜닝 후 OOS +5.1% (구 −5.6%)
+
+### 구현
+- [x] src/strategies/donchian_ensemble.py, src/portfolio/ (universe, allocator)
+- [x] src/live/portfolio_executor.py (매도→매수, 최소주문 생략), portfolio_tick.py (외부 입출금 분리 NAV, 손실 한도는 매수만 차단)
+- [x] 대시보드/텔레그램 멀티코인화, 구 tick.py 제거
+- [x] scripts/backtest_trend_rotation.py — 라이브와 같은 함수로 재현 (scratch 결과와 일치)
+- [x] tests/ 24개 + 워크플로우 테스트 게이트
+
+### 남은 일
+- [ ] testnet 2~4주 운영: 월말 유니버스 교체 1회 이상, 매도→매수 순서, testnet 미지원 종목 처리 확인
+- [ ] 선물 스캘퍼 중단 (서버에서 `sudo systemctl stop invest-coin-scalper && sudo systemctl disable invest-coin-scalper`) — 손익분기 승률 80~82% > 랜덤워크 승률 67~77%
+- [ ] mainnet 전 자본 규모 결정 ($3,000 미만이면 BTC 단독 운용)
+- [ ] (선택) mainnet 에서 유휴 USDT Simple Earn 연동 검토 (APR ~3.3%, 백테스트 Sharpe 1.14 → 1.26)
+
 ## 🔮 Phase 5 — 실거래 (Phase 4 통과 후)
 - [ ] Binance API 키 인증 + 테스트넷 우선
-- [ ] 일일 손실 한도 (예: 자본의 −5%에서 자동 정지)
-- [ ] 포지션 크기 한도 (예: 코인당 최대 자본 50%)
+- [x] 손실 한도 (직전 tick 대비 −5% → 매수 중지, 2026-10 버그 수정: 이전엔 하루 1 tick 이라 절대 발동 안 했음)
+- [x] 포지션 크기 한도 (BTC 슬리브 50% + 알트 슬롯 5%씩, 총 100% 상한)
 - [ ] kill switch (이상 신호 감지 시 즉시 청산 + 정지)
 - [ ] 슬리피지 보호 (limit order, 체결 실패 시 재시도)
 - [ ] 거래소 장애 대응 (재시도, 백오프)

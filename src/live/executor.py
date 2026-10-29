@@ -1,10 +1,7 @@
-"""Binance 실 매매 실행기.
+"""Binance 현물 주문 공용 헬퍼 (portfolio_executor 가 사용).
 
-핵심 책임:
-  - Binance에서 현재 잔고 + 가격 조회
-  - target_weight ∈ [0, 1] → 목표 BTC 가치 → 주문 수량 계산
-  - LOT_SIZE step, MIN_NOTIONAL, PRICE_FILTER 등 거래소 규칙 자동 적용
-  - 시장가 매수/매도 (quoteOrderQty for buy, quantity for sell)
+  - 심볼 분리, 거래소 규칙(LOT_SIZE / MIN_NOTIONAL / PRICE_FILTER) 조회
+  - LOT_SIZE step 내림
   - 체결 결과 정규화 (trade dict 형식)
 
 주의:
@@ -15,7 +12,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import ROUND_DOWN, Decimal
-from typing import Optional
 
 from binance.client import Client
 
@@ -105,57 +101,3 @@ def _normalize_order(order: dict, side: str, symbol: str) -> dict:
         "symbol": symbol,
     }
 
-
-def rebalance_to_target(
-    client: Client,
-    symbol: str,
-    target_weight: float,
-    min_rebalance_frac: float = 0.01,
-) -> Optional[dict]:
-    """현재 Binance 잔고를 target_weight 비율에 맞춰 시장가 주문.
-
-    target_weight ∈ [0, 1]: 전체 자산의 몇 %를 base(BTC)로 가져갈지.
-    min_rebalance_frac: 자산의 이 비율 미만 변동은 스킵 (수수료 까임 방지).
-
-    Returns: 체결 trade dict 또는 None (스킵 시).
-    Raises: BinanceAPIException 그대로 propagate (호출자가 처리).
-    """
-    if not 0.0 <= target_weight <= 1.0:
-        raise ValueError(f"target_weight must be in [0, 1], got {target_weight}")
-
-    base, quote = split_symbol(symbol)
-    filters = get_symbol_filters(client, symbol)
-    base_qty, quote_qty = get_balances(client, base, quote)
-    price = get_current_price(client, symbol)
-
-    equity = quote_qty + base_qty * price
-    target_value = equity * target_weight
-    current_value = base_qty * price
-    delta_value = target_value - current_value
-
-    if abs(delta_value) < equity * min_rebalance_frac:
-        return None
-
-    min_notional = float(filters["min_notional"])
-
-    if delta_value > 0:
-        # 매수: quoteOrderQty (USDT 금액)로 시장가
-        order_value = min(delta_value, quote_qty * 0.999)  # 수수료 여유분
-        if order_value < min_notional:
-            return None
-        # USDT는 보통 2자리 소수점
-        order_value_rounded = round(order_value, 2)
-        order = client.order_market_buy(
-            symbol=symbol, quoteOrderQty=order_value_rounded
-        )
-        return _normalize_order(order, "buy", symbol)
-    else:
-        # 매도: quantity (BTC 수량)로 시장가. LOT_SIZE step 내림.
-        sell_qty_target = min(-delta_value / price, base_qty)
-        sell_qty = _round_down(sell_qty_target, filters["lot_step"])
-        if sell_qty < float(filters["min_qty"]):
-            return None
-        if sell_qty * price < min_notional:
-            return None
-        order = client.order_market_sell(symbol=symbol, quantity=sell_qty)
-        return _normalize_order(order, "sell", symbol)

@@ -9,9 +9,39 @@ Python + Streamlit 기반 암호화폐 자동거래.
 - ✅ **Phase 2** 전략 확장 (MA cross / RSI), 그리드 서치, 멀티 코인 비교
 - ✅ **Phase 3** 신규 전략 (CRSI / Donchian-ATR / TSMOM / Larry-ATR / 앙상블 / Cycle-Aware) + 5년 multi-regime 검증
 - ✅ **Phase 4** Binance Testnet 실 매매 (Oracle Cloud self-hosted runner, 매일 자동 cron, Telegram 알림)
+- ✅ **Phase 4.6** 전략 교체: cycle_aware → **Trend Rotation** (2026-10, 문헌 조사 + 생존편향 없는 검증)
 - 🔮 **Phase 5** 실거래 (Testnet 통과 + 안전장치 추가 후)
 
-## 🏆 핵심 발견 — 5년 multi-regime 검증
+## 🏆 현재 전략 — Trend Rotation (2026-10 교체)
+
+**BTC 50% 슬리브 + 월간 알트 상위 10 슬리브**, 각 종목에 Donchian 앙상블 추세추종
+(Zarattini/Pagani/Barbon 2025 "Catching Crypto Trends" Combo) + 변동성 타깃.
+
+```
+종목별 신호 frac = 보유 중인 Donchian 기간 비율, 기간 {5,10,20,30,60,90,150,250,360}일
+  진입: 종가 = n일 최고 종가 / 손절선: 중앙값 래칫(내려가지 않음) / 청산: 종가 < 손절선
+BTC 슬리브 비중   = 0.5 × frac × min(0.40/σ90, 1)
+알트 슬롯 비중    = 0.05 × frac × min(0.60/σ90, 1)   (월말 유니버스 상위 10, 1/10씩)
+유니버스: 상장 365일↑, 30일 중위 거래대금 $2M↑, 스테이블/레버리지/래핑 제외, 거래대금 순
+리밸런스: 추세 신호 변화 즉시 / 변동성 변화는 슬롯 대비 20% 넘을 때만
+```
+
+**생존편향 없는 백테스트** (상장폐지 195개 포함 681개 페어, 편도 비용 0.15%, `scripts/backtest_trend_rotation.py`):
+
+| | 현재(구) cycle_aware | **Trend Rotation** | BTC 보유 |
+|---|---|---|---|
+| CAGR (2018-09~2026-10) | 21.9% | 22.8% (현금 3% 운용 시 25.6%) | 35.0% |
+| Sharpe | 1.06 | **1.14** (1.26) | 0.80 |
+| MDD | −28.4% | −28.2% (−24.8%) | −76.6% |
+| 설계/검증/홀드아웃 Sharpe | 1.32 / 0.72 / 0.79 | 1.33 / 1.31 / 0.51 | |
+| 파라미터 섭동 시 Sharpe 범위 | 0.07 ~ 1.17 | 1.15 ~ 1.27 | |
+
+- 교체 이유는 "수익률이 크게 높아서"가 아니라 **근거와 견고성**: 구 전략의 평균회귀·ADX·반감기 요소는 근거가 약했고 파라미터를 조금만 바꿔도 성과가 무너졌음 (과적합 신호)
+- 부트스트랩: Trend Rotation 이 더 나을 확률 76% (95% 유의 아님). 8년 데이터로는 어떤 전략도 확정 불가
+- 구조적 한계: 강세장에선 BTC 보유보다 덜 벎 (평균 노출 ~26%). 폭락장 방어가 대가
+- 근거 문헌·교차검증 내역: `tasks/lessons.md` L12~L15
+
+## 📚 과거 기록 — 5년 multi-regime 검증 (Phase 3)
 
 BTC 5년(2021-05 ~ 2026-05)을 3등분해 LUNA/FTX 폭락, 반감기 상승, 횡보장을 각각 평가.
 
@@ -55,7 +85,7 @@ streamlit run src/ui/app.py
 ```
 .
 ├── README.md
-├── smoke_test.py               빠른 동작 확인 (8개 전략)
+├── smoke_test.py               빠른 동작 확인 (등록된 전체 전략)
 ├── requirements.txt
 ├── .env.example                실거래 시 API 키 (백테스트는 불필요)
 ├── .gitignore
@@ -97,7 +127,7 @@ streamlit run src/ui/app.py
 ## 빠른 검증
 
 ```powershell
-# 8개 전략 동작 확인 (BTC 1년 데이터로 빠르게)
+# 등록된 전략 동작 확인 (BTC 1년 데이터로 빠르게)
 python -X utf8 smoke_test.py
 
 # 5년 multi-regime 결정타 검증 (시간 ~3분)
@@ -109,10 +139,11 @@ python -X utf8 scripts/grid_search.py
 
 > 콘솔 한글이 깨질 경우 `python -X utf8`로 실행.
 
-## 등록된 전략 (9개)
+## 등록된 전략 (10개)
 
 | 이름 | 분류 | 특징 |
 |---|---|---|
+| `donchian_ensemble` 🏆 | 추세 앙상블 | 9개 기간 Donchian + 중앙값 래칫 손절 + 변동성 타깃 (라이브 Trend Rotation 의 종목별 신호) |
 | `volatility_breakout` | 단기 추세 | Larry Williams 원안 (K값 돌파) |
 | `ma_cross` | 추세 | 단기/장기 이동평균 크로스 |
 | `rsi` | 평균회귀 | RSI 단순 크로스 |
@@ -121,7 +152,7 @@ python -X utf8 scripts/grid_search.py
 | `tsmom` | 추세 + 사이징 | Vol-targeted Time-Series Momentum |
 | `larry_atr` | 하이브리드 | 변동성 돌파 + ATR Trailing + Vol Sizing |
 | `ensemble` | 결합 | 7개 전략 가중 평균 + soft threshold |
-| `cycle_aware` 🏆 | 적응 | ADX regime + SMA200 필터 + BTC 반감기 사이클 + Vol-targeting (Phase 4 디폴트) |
+| `cycle_aware` | 적응 | ADX regime + SMA200 필터 + BTC 반감기 사이클 + Vol-targeting (2026-10 까지 라이브, 과적합 판정으로 교체) |
 
 ## 새 전략 추가 방법
 
@@ -142,34 +173,45 @@ python -X utf8 scripts/grid_search.py
 
 ## Phase 4 — Binance Testnet 실 매매 (가짜 돈, 진짜 API)
 
-매일 한 번씩 cycle_aware 신호로 **실제 Binance Testnet API**에 주문 → 결과를
+매일 한 번씩 Trend Rotation 목표 비중으로 **실제 Binance Testnet API**에 주문 → 결과를
 state.json + HTML 대시보드 + Telegram 알림으로 저장. 거래소 규칙(LOT_SIZE,
 MIN_NOTIONAL, 정밀도), 부분 체결, 주문 거부 같은 실전 버그를 0원 리스크로 검증.
 
 ### 핵심 동작
 
-- **신호 시점**: 어제 UTC 00:00 마감 봉 → cycle_aware 신호 계산 → 즉시 시장가 주문
-- **거래 단위**: 연속 포지션. 신호 0.6이면 자산의 60%를 BTC로 보유
+- **신호 시점**: 어제 UTC 00:00 마감 봉 → 종목별 Donchian 앙상블 → 목표 비중 → 시장가 주문
+- **유니버스**: 월말에 메인넷 공개 데이터로 재선정. testnet 에서 거래 불가한 종목은 건너뜀
+- **주문 순서**: 매도 먼저 → USDT 확보 후 매수. $5 미만 주문은 생략
 - **잔고 추적**: Binance 계정이 source-of-truth (매 tick 잔고 재조회)
-- **하이스테리시스**: 자산의 1% 미만 변동은 리밸런싱 스킵 (수수료만 까임)
+- **외부 입출금 분리**: tick 사이 설명 안 되는 자산 변화(testnet 잔고 리셋 등)는 성과(NAV)에서 제외
 - **재실행 안전**: 같은 봉(`last_bar_time`)을 두 번 처리해도 거래 중복 없음
+- **소액 계좌**: 총자산 < $3,000 이면 알트 슬리브 끄고 BTC 단독 (최소 주문금액 대응)
+- **테스트 게이트**: 워크플로우가 `pytest` 를 먼저 돌리고 실패하면 매매하지 않음
 
 ### 구조
 
 ```
+src/strategies/donchian_ensemble.py  Donchian 앙상블 신호 (백테스트·라이브 공용)
+src/portfolio/
+├── universe.py       유니버스 선정 / 월중 제외 규칙
+└── allocator.py      목표 비중 + 리밸런스 밴드 (백테스트·라이브 공용)
+
 src/live/
-├── client.py         testnet/mainnet 토글 Binance Client
-├── executor.py       rebalance + LOT_SIZE/MIN_NOTIONAL/PRICE_FILTER 자동 적용
-└── tick.py           fetch→signal→Binance 주문→state/dashboard
+├── client.py             testnet/mainnet 토글 Binance Client
+├── executor.py           LOT_SIZE/MIN_NOTIONAL 헬퍼, 체결 정규화
+├── portfolio_executor.py 멀티코인 리밸런스 (매도→매수)
+└── portfolio_tick.py     잔고→유니버스→신호→안전장치→주문→state/dashboard
 
 src/common/           live tick이 쓰는 공유 유틸
 ├── state.py          JSON 영속화 (data/live_state.json)
-└── dashboard.py      state → HTML
+└── dashboard.py      state → HTML (NAV vs BTC 보유)
 
-src/notifier/         Telegram 알림
-└── telegram.py       매 tick 결과 한국어 메시지 (변함없음 / 매수·매도 체결 / 오류)
+src/notifier/telegram.py  매 tick 한국어 메시지 (리밸런스 / 정지 / 오류 / 보유 비중)
 
-scripts/live_tick.py              엔트리 포인트
+scripts/live_tick.py                엔트리 포인트
+scripts/backtest_trend_rotation.py  생존편향 없는 백테스트 (라이브와 같은 함수)
+scripts/fetch_all_pairs.py          상장폐지 포함 전체 USDT 페어 일봉 → data/all/
+tests/test_trend_rotation.py        단위 + 가짜 거래소 통합 테스트
 .github/workflows/live_trading.yml 매일 UTC 00:35 (KST 09:35) self-hosted runner
 docs/live_dashboard.html          생성된 대시보드 (TESTNET 뱃지 초록)
 data/live_state.json              현재 상태 (자동 커밋됨)
@@ -238,12 +280,14 @@ python -X utf8 scripts/live_tick.py
 
 | 보호 | 동작 |
 |---|---|
-| Symbol filter 자동 적용 | LOT_SIZE step / MIN_NOTIONAL / PRICE_FILTER 거래소 규칙 준수 |
-| 잔고 한도 | 사려는 금액이 USDT 잔고 초과 시 가능한 만큼만 매수 |
-| 수량 한도 | 팔려는 양이 BTC 잔고 초과 시 잔고까지만 매도 |
+| Symbol filter 자동 적용 | LOT_SIZE step / MIN_NOTIONAL 거래소 규칙 준수, 미달 주문 생략 |
+| 잔고 한도 | 매도 먼저 실행 후 남은 USDT 범위에서만 매수 |
 | 같은 봉 방어 | `last_bar_time` 비교로 같은 봉 두 번 매매 안 함 |
-| 1% 미만 리밸 스킵 | 자산의 1% 미만 변동은 수수료 까임 방지 위해 무시 |
-| 주문 거부 처리 | `BinanceAPIException` 잡아서 에러 trade로 기록 (다음 tick에 재시도) |
+| 리밸런스 밴드 | 변동성 때문만의 비중 변화는 슬롯 대비 20% 넘을 때만 (회전·비용 절감) |
+| 손실 한도 | 직전 tick 대비 −5% 이하면 **매수만** 중지 (청산·축소는 허용) |
+| 이상 목표 | NaN/음수/총합>100% 면 주문 중지 |
+| 비상정지 | 프로젝트 루트에 `.halt` 파일이 있으면 모든 주문 중지 |
+| 주문 거부 처리 | 종목별 `BinanceAPIException` 을 에러 trade로 기록하고 나머지 종목은 계속 |
 
 ### Mainnet으로 전환할 때 (Phase 5)
 
@@ -256,8 +300,7 @@ testnet: false   # ⚠️ 실거래 활성화
 추가 secrets 필요:
 - `BINANCE_API_KEY` / `BINANCE_API_SECRET` (실 계정의 API 키, **출금 권한 ❌**, 거래 권한만)
 
-**Mainnet 전환 전 추가 안전장치 필요** (Phase 5에서 구현):
-- 일일 손실 한도 (예: -5% 도달 시 자동 정지)
-- 포지션 최대 캡 (예: 자본의 50%까지만)
-- 텔레그램 즉시 알림
+**Mainnet 전환 전 남은 일** (Phase 5):
 - IP 화이트리스트: Oracle Cloud 인스턴스의 public IP 고정 후 Binance API key에서 화이트리스트 등록
+- 자본 $3,000 미만이면 BTC 단독으로 돈다는 점 확인 (`min_equity_for_alts`)
+- (선택) 유휴 USDT → Simple Earn Flexible (현재 APR ~3.3%, testnet 미지원이라 mainnet 에서만 검증 가능, 거래소 리스크 감수)
