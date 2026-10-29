@@ -1,0 +1,23 @@
+# 실거래(mainnet) 전환용 설정 예시.
+# 사용법: 이 파일을 config/live_trading.yaml 로 복사 → 값 확인 → commit/push.
+#         (live_trading.yaml 이 없으면 scripts/live_tick.py 의 DEFAULT_CONFIG = testnet 으로 동작)
+#
+# 전환 전 체크:
+#   1) Binance API 키: Reading + Spot Trading 만, Withdrawals 절대 OFF, IP 제한 = Oracle 서버 IP
+#   2) GitHub Secrets: BINANCE_API_KEY / BINANCE_API_SECRET
+#   3) 계좌에 USDT 입금 (총자산 < $3,000 이면 BTC 단독 운용)
+#   4) 모드가 바뀌면 옛 testnet state 는 자동 백업되고 새로 시작됨
+
+testnet: false   # ⚠️ 실거래 — 진짜 돈
+
+min_equity_for_alts: 3000   # 이 미만이면 알트 슬리브 끄고 BTC 단독
+
+safety:
+  daily_loss_limit_pct: 0.05   # 직전 tick 대비 -5% 이하면 매수 중지 (매도는 허용)
+  halt_file: ".halt"           # 저장소 루트에 커밋하거나, 서버에서 touch ~/.invest-coin.halt → 모든 주문 중지
+
+# trend_rotation:              # 전략 파라미터는 검증된 기본값 그대로 두는 것을 권장
+#   btc_sleeve: 0.5
+#   alt_slots: 10
+#   btc_target_vol: 0.40
+#   alt_target_vol: 0.60
