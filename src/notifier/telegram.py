@@ -85,103 +85,49 @@ def _kst_str(dt: Optional[datetime] = None) -> str:
     return kst.strftime("%Y-%m-%d %H:%M KST")
 
 
-def format_tick_notification(mode: str, result: dict) -> str:
-    """Tick 결과 dict → 한국어 Telegram Markdown 메시지.
 
-    원칙:
-      - 매매 발생: 체결 정보 + 잔고 현황 풍부하게
-      - 변함없음: 신호/가격/총자산을 함께 표시해 봇 정상 동작 검증 가능하게
-      - 에러: 코드/메시지
+def format_portfolio_notification(result: dict) -> str:
+    """Trend Rotation tick 결과 → 한국어 Telegram Markdown 메시지.
 
-    result 필수 키: signal, price, equity, cash, base_qty, trade (None 가능), duplicate_bar, bar_time.
+    result: src.live.portfolio_tick.run_portfolio_tick 반환값.
+    매 tick 헬스체크 역할 — 총자산/노출/종목별 비중을 항상 표시, 체결·정지·오류는 강조.
     """
-    mode_label = {
-        "testnet": "📊 실투자 (테스트넷)",
-        "mainnet": "🔥 실거래",
-    }.get(mode, "📊 실투자 (테스트넷)")
+    mode_label = {"testnet": "📊 실투자 (테스트넷)", "mainnet": "🔥 실거래"}.get(result.get("mode"), "📊 테스트넷")
+    lines = [f"{mode_label} · {_kst_str()}"]
 
-    header = f"{mode_label} · {_kst_str()}"
-    trade = result.get("trade")
+    if result.get("halted") or result.get("buy_blocked"):
+        title = "🛑 *매매 정지*" if result.get("halted") else "⚠️ *매수 중지 (매도만 허용)*"
+        lines += ["", title] + [f"• {r}" for r in result.get("reasons", [])]
 
-    # CASE 0: 안전장치 발동 (가장 중요 — 매매 정지 상태)
-    if result.get("halted"):
-        reasons = result.get("halted_reasons", [])
-        reason_lines = "\n".join(f"• {r}" for r in reasons)
-        return (
-            f"🛑 *매매 정지* ({header})\n"
-            f"{reason_lines}\n\n"
-            f"💼 총자산: `${float(result.get('equity', 0)):,.2f}`\n"
-            f"🎯 신호: `{float(result.get('raw_signal', 0)):.3f}`"
-        )
-
-    # CASE 1: 변함없음 (거래 없음)
-    # 헬스체크 역할: 신호/가격/총자산이 매일 갱신되는지 확인 가능.
-    if trade is None:
-        bar_short = (result.get("bar_time") or "")[:10]
-        signal = float(result.get("signal", 0))
-        price = float(result.get("price", 0))
-        equity = float(result.get("equity", 0))
-        cash = float(result.get("cash", 0))
-        base_qty = float(result.get("base_qty", 0))
-        position_value = base_qty * price
-        current_weight = (position_value / equity) if equity > 0 else 0.0
-
-        if result.get("duplicate_bar"):
-            reason = "같은 봉 재처리"
-        else:
-            reason = f"목표 {signal*100:.1f}% ↔ 현재 {current_weight*100:.1f}% (1% 미만 차이)"
-
-        lines = [
-            header,
-            f"변함없음 ({reason})",
-            "",
-            f"🎯 신호: `{signal:.3f}` (기준 봉 {bar_short})",
-            f"💰 현재가: `${price:,.2f}`",
-            f"💼 총자산: `${equity:,.2f}`",
-            f"  ├ 예수금: `${cash:,.2f}`",
-            f"  └ BTC: `{base_qty:.6f}` (`${position_value:,.2f}`)",
-        ]
-        return "\n".join(lines)
-
-    # CASE 2: 주문 오류
-    if trade.get("side") == "error":
-        lines = [header, "", "⚠️ *주문 오류*"]
-        if "error_code" in trade:
-            lines.append(f"• 에러 코드: `{trade['error_code']}`")
-        if "error_message" in trade:
-            lines.append(f"• 메시지: `{trade['error_message']}`")
-        return "\n".join(lines)
-
-    # CASE 3: 매수/매도 체결
-    side = trade.get("side", "").upper()
-    side_emoji = "🚀" if side == "BUY" else "💰"
-    side_label = "매수" if side == "BUY" else "매도"
-    symbol = trade.get("symbol", "BTCUSDT")
-    t_qty = float(trade.get("qty", 0))
-    t_price = float(trade.get("price", 0))
-    t_value = float(trade.get("value", 0))
-    t_fee = float(trade.get("fee", 0))
-    fee_asset = trade.get("fee_asset", "USDT")
+    trades = result.get("trades") or []
+    fills = [t for t in trades if t.get("side") in ("buy", "sell")]
+    errors = [t for t in trades if t.get("side") == "error"]
+    if fills:
+        lines += ["", f"🔁 *리밸런스 {len(fills)}건*"]
+        for t in fills:
+            emoji = "🚀 매수" if t["side"] == "buy" else "💰 매도"
+            lines.append(f"• {emoji} `{t['symbol']}` `${float(t.get('value', 0)):,.2f}` @ `{float(t.get('price', 0)):,.4f}`")
+    elif not result.get("duplicate_bar"):
+        lines += ["", "변함없음 (밴드 안 — 리밸런스 불필요)"]
+    else:
+        lines += ["", "변함없음 (같은 봉 재처리)"]
+    for t in errors:
+        lines.append(f"⚠️ `{t.get('symbol')}` {t.get('attempted')} 실패 `{t.get('error_code')}` {str(t.get('error_message'))[:80]}")
 
     equity = float(result.get("equity", 0))
-    cash = float(result.get("cash", 0))
-    base_qty = float(result.get("base_qty", 0))
-    current_price = float(result.get("price", t_price))
-    position_value = base_qty * current_price
-
-    lines = [
-        header,
+    lines += [
         "",
-        f"{side_emoji} *{side_label} 체결*",
-        f"• 종목: `{symbol}`",
-        f"• 수량: `{t_qty:.6f} BTC`",
-        f"• 체결가: `${t_price:,.2f}`",
-        f"• 체결금액: `${t_value:,.2f}`",
-        f"• 수수료: `{t_fee:.6f} {fee_asset}`",
-        "",
-        "💼 *잔고 현황*",
-        f"• 총자산: `${equity:,.2f}`",
-        f"• 평가금액: `${position_value:,.2f}` (BTC {base_qty:.6f})",
-        f"• 예수금: `${cash:,.2f}`",
+        f"💼 총자산 `${equity:,.2f}` · 노출 `{float(result.get('exposure', 0))*100:.1f}%`",
+        f"📈 누적 `{(float(result.get('nav', 1)) - 1)*100:+.2f}%` (BTC 보유 `{float(result.get('btc_return', 0))*100:+.2f}%`)",
     ]
+    weights = result.get("weights") or {}
+    if weights:
+        top = sorted(weights.items(), key=lambda kv: -kv[1])[:8]
+        lines.append("📦 " + " · ".join(f"`{s.replace('USDT', '')}` {w*100:.1f}%" for s, w in top))
+    if abs(float(result.get("external_flow", 0))) > 0:
+        lines.append(f"ℹ️ 외부 입출금 감지 `${float(result['external_flow']):+,.2f}` (성과에서 제외)")
+    if result.get("untradable"):
+        lines.append(f"ℹ️ 이 계정에서 거래 불가: {', '.join(result['untradable'])}")
+    if not result.get("alts_enabled", True):
+        lines.append("ℹ️ 소액 계좌 → BTC 단독 운용")
     return "\n".join(lines)

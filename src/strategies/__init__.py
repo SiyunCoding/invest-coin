@@ -10,6 +10,7 @@ from .base import Signal, Strategy
 from .crsi import ConnorsRSI
 from .cycle_aware import CycleAwareEnsemble
 from .donchian_atr import DonchianATR
+from .donchian_ensemble import DonchianEnsemble
 from .ensemble import WeightedEnsemble
 from .larry_atr import LarryATR
 from .ma_cross import MACross
@@ -39,6 +40,16 @@ class StrategyMeta:
 
 
 REGISTRY: dict[str, StrategyMeta] = {
+    "donchian_ensemble": StrategyMeta(
+        cls=DonchianEnsemble,
+        label="Donchian 앙상블 추세추종 (Zarattini 2025 Combo) — 라이브 디폴트",
+        params=(
+            ParamSpec("target_vol", "목표 연환산 변동성", "float", 0.40, 0.10, 1.00, 0.05,
+                      "비중 = 추세비율 × min(목표/90일 변동성, 1). 논문 0.25, BTC 라이브 0.40."),
+            ParamSpec("vol_window", "변동성 윈도우", "int", 90, 30, 180, 10,
+                      "연환산 변동성 계산 기간(일). 논문 90일(3개월)."),
+        ),
+    ),
     "volatility_breakout": StrategyMeta(
         cls=VolatilityBreakout,
         label="변동성 돌파 (Larry Williams)",
@@ -186,5 +197,5 @@ STRATEGIES: dict[str, type[Strategy]] = {k: v.cls for k, v in REGISTRY.items()}
 __all__ = [
     "Strategy", "Signal", "ParamSpec", "StrategyMeta", "REGISTRY", "STRATEGIES",
     "VolatilityBreakout", "MACross", "RSIStrategy", "ConnorsRSI", "DonchianATR",
-    "VolTargetedTSMOM", "LarryATR", "WeightedEnsemble", "CycleAwareEnsemble",
+    "VolTargetedTSMOM", "LarryATR", "WeightedEnsemble", "CycleAwareEnsemble", "DonchianEnsemble",
 ]

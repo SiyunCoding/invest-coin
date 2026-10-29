@@ -1,7 +1,7 @@
-"""Live (Binance Testnet/Mainnet) trading tick.
+"""Live (Binance Testnet/Mainnet) Trend Rotation tick.
 
-매일 한 번씩 호출 → cycle_aware 신호 → Binance API 시장가 주문 → state/dashboard/Telegram.
-디폴트는 testnet=True (가짜 돈). config/live_trading.yaml로 mainnet 전환 가능.
+매일 한 번 호출 → BTC 슬리브 + 월간 알트 유니버스 Donchian 앙상블 → 시장가 리밸런스 → state/dashboard/Telegram.
+디폴트는 testnet=True (가짜 돈). config/live_trading.yaml 로 override (mainnet 전환 포함).
 
 실행:
   로컬: $env:BINANCE_TESTNET_API_KEY='xxx' ; python -X utf8 scripts/live_tick.py
@@ -18,36 +18,36 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.live import run_live_tick  # noqa: E402
+from src.live import run_portfolio_tick  # noqa: E402
 
 
 DEFAULT_CONFIG = {
-    "symbol": "BTCUSDT",
-    "interval": "1d",
-    "strategy": "cycle_aware",
-    "strategy_params": {},
-    "testnet": True,                # 기본 = 테스트넷. 실거래 시 False 명시 필요
-    "fee_rate": 0.001,              # 표시용 (실제 fee는 Binance가 적용)
-    "slippage_rate": 0.0005,
-    "lookback_days": 730,
-    # 안전장치 (mainnet 운영 시 특히 중요)
+    "strategy": "trend_rotation",
+    "testnet": True,                 # 기본 = 테스트넷. 실거래 시 False 명시 필요
+    "lookback_days": 1000,           # 360일 Donchian + 90일 변동성 + 경로 의존 여유
+    "candidate_pool": 40,            # 유니버스 후보: 24h 거래대금 상위 N 개만 30일 중위값 계산
+    "min_equity_for_alts": 3000,     # 이 미만이면 알트 슬리브 끄고 BTC 단독 (최소 주문금액 $5 대응: 최소 슬롯 ~0.33%)
+    "trend_rotation": {},            # src.portfolio.TrendRotationConfig 필드 override
     "safety": {
-        "daily_loss_limit_pct": 0.05,    # 하루에 -5% 도달 시 자동 정지
-        "max_position_weight": 1.0,       # 신호 클램프 상한 (1.0 = 100% 허용)
-        "max_signal_value": 1.0,          # 이상 신호 차단 임계값
-        "halt_file": ".halt",             # 이 파일 존재 시 모든 매매 중지
+        "daily_loss_limit_pct": 0.05,   # 직전 tick 대비 -5% 이하면 매수 중지 (매도는 허용)
+        "halt_file": ".halt",           # 이 파일 존재 시 모든 주문 중지
     },
 }
 
 
 def _load_config() -> dict:
-    """config/live_trading.yaml 이 있으면 디폴트와 머지."""
+    """config/live_trading.yaml 이 있으면 디폴트와 머지 (safety/trend_rotation 은 한 단계 깊이까지)."""
     cfg_path = ROOT / "config" / "live_trading.yaml"
+    config = {k: (dict(v) if isinstance(v, dict) else v) for k, v in DEFAULT_CONFIG.items()}
     if cfg_path.exists():
         with open(cfg_path, "r", encoding="utf-8") as f:
             user_cfg = yaml.safe_load(f) or {}
-        return {**DEFAULT_CONFIG, **user_cfg}
-    return DEFAULT_CONFIG
+        for k, v in user_cfg.items():
+            if isinstance(v, dict) and isinstance(config.get(k), dict):
+                config[k].update(v)
+            else:
+                config[k] = v
+    return config
 
 
 def main() -> int:
@@ -57,33 +57,28 @@ def main() -> int:
     cache_dir = ROOT / "data"
 
     mode = "testnet" if config.get("testnet", True) else "MAINNET"
-    print(f"[live/{mode}] tick start — strategy={config['strategy']}, symbol={config['symbol']}")
-    result = run_live_tick(
-        state_path=state_path,
-        dashboard_path=dashboard_path,
-        config=config,
-        cache_dir=cache_dir,
-    )
+    print(f"[live/{mode}] tick start — strategy={config['strategy']}")
+    result = run_portfolio_tick(state_path=state_path, dashboard_path=dashboard_path,
+                                config=config, cache_dir=cache_dir)
 
-    if result["duplicate_bar"]:
-        print(f"[live/{mode}] same bar as last tick ({result['bar_time']}), no trade")
-    elif result["trade"]:
-        t = result["trade"]
+    print(f"[live/{mode}] bar={result['bar_time']} equity=${result['equity']:,.2f} "
+          f"exposure={result['exposure']*100:.1f}% nav={result['nav']:.4f}")
+    print(f"[live/{mode}] universe={result['universe']} dropped={result['dropped']} "
+          f"untradable={result['untradable']}")
+    for t in result["trades"]:
         if t.get("side") == "error":
-            print(f"[live/{mode}] ORDER ERROR: code={t['error_code']} {t['error_message']}")
-            return 1
-        print(f"[live/{mode}] {t['side'].upper()} {t['qty']:.6f} @ ${t['price']:.2f} "
-              f"(fee {t['fee']:.6f} {t.get('fee_asset', '')}) "
-              f"— signal={result['signal']:.3f}")
-    else:
-        print(f"[live/{mode}] signal={result['signal']:.3f} — no rebalance needed")
-
-    print(f"[live/{mode}] cash=${result['cash']:.2f}, "
-          f"BTC={result['base_qty']:.6f}, "
-          f"equity=${result['equity']:.2f}, "
-          f"price=${result['price']:.2f}")
+            print(f"[live/{mode}] ORDER ERROR {t.get('symbol')} {t.get('attempted')}: "
+                  f"{t.get('error_code')} {t.get('error_message')}")
+        else:
+            print(f"[live/{mode}] {t['side'].upper()} {t['symbol']} {t['qty']:.6f} @ {t['price']:.4f} "
+                  f"(${t['value']:,.2f})")
+    if result["reasons"]:
+        print(f"[live/{mode}] SAFETY: {result['reasons']}")
+    if result["external_flow"]:
+        print(f"[live/{mode}] external flow detected ${result['external_flow']:+,.2f}")
     print(f"[live/{mode}] dashboard → {dashboard_path.relative_to(ROOT)}")
-    return 0
+    errors = [t for t in result["trades"] if t.get("side") == "error"]
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":
