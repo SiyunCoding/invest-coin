@@ -32,7 +32,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: main                    # job 시작 시점의 최신 main (대기 중 쌓인 tick 커밋 반영, private 저장소에서도 동작)
           persist-credentials: false   # 쓰기 토큰은 commit step 에서만 사용
