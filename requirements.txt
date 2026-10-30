@@ -2,7 +2,7 @@
 pandas==3.0.3
 numpy==2.4.5
 pyarrow==24.0.0
-python-binance==1.0.36
+python-binance==1.0.37
 pyyaml==6.0.3
 requests==2.34.2
 pytest==9.2.0
