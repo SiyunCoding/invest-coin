@@ -22,6 +22,7 @@ class SymbolRules:
     step: Decimal          # 시장가 수량 단위 (MARKET_LOT_SIZE 가 있으면 그것, 없으면 LOT_SIZE)
     min_qty: Decimal
     min_notional: Decimal
+    max_qty: Decimal = Decimal("0")   # 시장가 1회 최대 수량 (0 = 제한 없음). 초과분은 다음 tick 에 이어서
 
 
 def _decimal(x) -> Decimal:
@@ -43,10 +44,12 @@ def load_exchange(client: Client) -> tuple[set[str], dict[str, SymbolRules]]:
         if _decimal(mkt.get("stepSize", "0")) > step:
             step = _decimal(mkt["stepSize"])
         notional = f.get("NOTIONAL") or f.get("MIN_NOTIONAL") or {}
+        max_qtys = [m for m in (_decimal(lot.get("maxQty", "0")), _decimal(mkt.get("maxQty", "0"))) if m > 0]
         rules[s["symbol"]] = SymbolRules(
             step=step if step > 0 else Decimal("0.00000001"),
-            min_qty=_decimal(lot.get("minQty", "0")),
+            min_qty=max(_decimal(lot.get("minQty", "0")), _decimal(mkt.get("minQty", "0"))),
             min_notional=_decimal(notional.get("minNotional") or notional.get("notional") or "0"),
+            max_qty=min(max_qtys) if max_qtys else Decimal("0"),
         )
     return tradable, rules
 
@@ -146,6 +149,8 @@ def rebalance_portfolio(
             continue
         r = rules[sym]
         target = qty[sym] if full_exit else min(-delta / prices[sym], qty[sym])
+        if r.max_qty > 0:
+            target = min(target, float(r.max_qty))
         q = qty_string(target, r.step)
         if _decimal(q) < max(r.min_qty, r.step) or _decimal(q) * _decimal(prices[sym]) < r.min_notional:
             continue

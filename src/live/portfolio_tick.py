@@ -221,15 +221,19 @@ def run_portfolio_tick(state_path: Path, dashboard_path: Path, config: dict,
     uni = state.get("universe", {})
     selected_at = pd.Timestamp(uni["selected_at"]) if uni.get("selected_at") else None
     if alts_enabled and (selected_at is None or selected_at < last_month_end(bar_time)):
+        pool = _retry(_candidate_symbols, int(config.get("candidate_pool", 40)))
         cands = {}
-        for s in _retry(_candidate_symbols, int(config.get("candidate_pool", 40))):
+        for s in pool:
             try:
-                cands[s] = _retry(_daily, s, cache_dir, lookback)
+                cands[s] = _retry(_daily, s, cache_dir, lookback).loc[:bar_time]
             except Exception as e:  # 후보 하나 실패가 재선정 전체를 막지 않게
                 print(f"[live] candidate {s} skipped: {e}")
-        uni = {"symbols": select_universe(cands, cfg.alt_slots, cfg.min_listing_days, cfg.min_median_volume),
-               "selected_at": bar_time.isoformat()}
-        state["universe"] = uni
+        if pool and len(cands) >= 0.8 * len(pool):
+            uni = {"symbols": select_universe(cands, cfg.alt_slots, cfg.min_listing_days, cfg.min_median_volume),
+                   "selected_at": bar_time.isoformat()}
+            state["universe"] = uni
+        else:  # rate limit 등 대량 실패 → 빈/불완전 유니버스로 한 달 고정되지 않게 기존 유지, 다음 tick 재시도
+            print(f"[live] universe reselection skipped: only {len(cands)}/{len(pool)} candidates loaded")
     universe = uni.get("symbols", []) if alts_enabled else []
 
     # 재선정 후 추적 범위로 다시 평가 (새 유니버스 종목을 이미 들고 있을 수 있음)
@@ -245,7 +249,8 @@ def run_portfolio_tick(state_path: Path, dashboard_path: Path, config: dict,
             print(f"[live] {s} data fetch failed: {e}")
             fetch_failed.append(s)
             continue
-        if df.empty or df.index[-1] != bar_time or should_drop(df, cfg.exit_median_volume, cfg.min_median_move):
+        df = df.loc[:bar_time]  # BTC 이후 UTC 자정을 넘겨 한 봉 더 받은 경우 기준 봉에 맞춤
+        if df.empty or df.index[-1] < bar_time or should_drop(df, cfg.exit_median_volume, cfg.min_median_move):
             dropped.append(s)  # 상장폐지/데이터 끊김/유동성 고갈 → 보유분은 청산
             continue
         if s not in tradable:  # testnet 은 거래 가능 페어가 적음
@@ -255,6 +260,7 @@ def run_portfolio_tick(state_path: Path, dashboard_path: Path, config: dict,
         live_universe.append(s)
 
     # 5) 목표 비중 + 밴드
+    prev_fracs_before = dict(state.get("prev_fracs", {}))
     targets, fracs = target_weights(closes, live_universe, cfg)
     desired = apply_band(targets, current, fracs, state.get("prev_fracs", {}), live_universe, cfg)
     for s in fetch_failed:  # 일시적 데이터 실패 종목은 팔지 않고 현 상태 유지
@@ -297,13 +303,16 @@ def run_portfolio_tick(state_path: Path, dashboard_path: Path, config: dict,
         save_state(state_path, state)
         raise
     equity, qty, weights = snapshot(balances, prices, (tracked | set(desired)) & set(prices))
-    if equity_pre > 0 and not resync:
-        state["nav"] *= equity / equity_pre  # tick 안의 수수료/체결 손실 반영
+    if equity_pre > 0:  # tick 안의 수수료/체결 손실 반영 (같은 tick 값만 쓰므로 resync 와 무관)
+        state["nav"] *= equity / equity_pre
     state["resync"] = False
     state["holdings"] = {s: q for s, q in qty.items() if q * prices.get(s, 0.0) >= DUST_USD}
     state["cash"] = balances.get("USDT", 0.0)
     if not duplicate:
         state["prev_fracs"] = _next_prev_fracs(state, fracs, desired, weights, skip_all=bool(reasons or buy_block))
+        for s in fetch_failed:  # 데이터 일시 실패 종목은 직전 신호 유지 (복구 날 밴드 없이 급변 방지)
+            if s in prev_fracs_before:
+                state["prev_fracs"][s] = prev_fracs_before[s]
     state["peak_nav"] = max(state.get("peak_nav", 1.0), state["nav"])
     btc_px = prices.get(cfg.btc_symbol, 0.0)
     state["history"].append({

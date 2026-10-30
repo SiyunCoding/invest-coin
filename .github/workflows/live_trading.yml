@@ -24,6 +24,8 @@ concurrency:
 
 jobs:
   tick:
+    # main 에서만 매매 (다른 브랜치에서 수동 실행하면 리뷰 안 된 코드가 실키로 돌고 main 에 push 됨)
+    if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 20
     permissions:
@@ -32,10 +34,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
-          persist-credentials: false
-
-      - name: Sync to latest main (대기 중 쌓인 tick 커밋 반영)
-        run: git pull --ff-only origin main
+          ref: main                    # job 시작 시점의 최신 main (대기 중 쌓인 tick 커밋 반영, private 저장소에서도 동작)
+          persist-credentials: false   # 쓰기 토큰은 commit step 에서만 사용
 
       - name: Install dependencies (fresh venv)
         run: |
@@ -47,10 +47,10 @@ jobs:
         id: mode
         run: |
           .venv/bin/python - >> "$GITHUB_OUTPUT" <<'EOF'
-          import pathlib, yaml
-          p = pathlib.Path("config/live_trading.yaml")
-          cfg = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
-          print("mainnet=" + ("true" if cfg.get("testnet", True) is False else "false"))
+          import sys
+          sys.path.insert(0, "scripts")
+          from live_tick import _load_config, is_mainnet  # 스크립트와 같은 판정 함수
+          print("mainnet=" + ("true" if is_mainnet(_load_config()) else "false"))
           EOF
 
       - name: Run tests (실패 시 매매 안 함)

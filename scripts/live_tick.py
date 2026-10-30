@@ -51,6 +51,11 @@ def _load_config() -> dict:
     return config
 
 
+def is_mainnet(config: dict) -> bool:
+    """실거래 여부 (워크플로우가 mainnet 키 전달 여부를 정할 때도 이 함수를 씀)."""
+    return not bool(config.get("testnet", True))
+
+
 def main() -> int:
     config = _load_config()
     state_path = ROOT / "data" / "live_state.json"
@@ -58,7 +63,7 @@ def main() -> int:
     # 러너 작업 폴더는 매 실행 git clean 되므로 캐시/백업은 홈 아래에 (재다운로드·백업 소실 방지)
     home = Path(os.environ.get("INVEST_COIN_HOME", Path.home() / ".invest-coin"))
 
-    mode = "testnet" if config.get("testnet", True) else "MAINNET"
+    mode = "MAINNET" if is_mainnet(config) else "testnet"
     print(f"[live/{mode}] tick start — strategy={config['strategy']}")
     result = run_portfolio_tick(state_path=state_path, dashboard_path=dashboard_path, config=config,
                                 cache_dir=home / "cache", root_dir=ROOT, backup_dir=home / "backups")

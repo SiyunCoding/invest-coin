@@ -235,3 +235,48 @@ def test_live_tick_config_merge(tmp_path, monkeypatch):
     assert cfg["testnet"] is False
     assert cfg["safety"] == {"daily_loss_limit_pct": 0.03, "halt_file": ".halt"}  # 중첩 기본값 유지
     assert lt.DEFAULT_CONFIG["safety"]["daily_loss_limit_pct"] == 0.05            # 기본값 오염 없음
+
+
+def test_alt_with_extra_bar_past_midnight_not_dropped(tick_env):
+    """BTC 를 받은 뒤 UTC 자정이 지나 알트만 한 봉 더 받아도 '끊긴 데이터'로 오판해 청산하면 안 됨."""
+    eth = tick_env["data"]["ETHUSDT"]
+    extra = eth.iloc[[-1]].copy()
+    extra.index = extra.index + pd.Timedelta(days=1)
+    tick_env["data"]["ETHUSDT"] = pd.concat([eth, extra])
+    res = tick_env["run"]()
+    assert "ETHUSDT" not in res["dropped"] and "ETHUSDT" in res["universe"]
+
+
+def test_universe_kept_when_most_candidates_fail(tick_env, monkeypatch):
+    """rate limit 등으로 후보 대부분 실패 → 빈 유니버스로 한 달 고정되지 말고 기존 유지."""
+    tick_env["run"]()
+    before = _state(tick_env)["universe"]
+    state = _state(tick_env)
+    state["last_bar_time"] = None
+    state["universe"]["selected_at"] = "2020-01-31T00:00:00+00:00"   # 재선정 필요한 상태
+    _write_state(tick_env, state)
+    pt, data = tick_env["pt"], tick_env["data"]
+
+    def flaky(sym, cache_dir, lookback):
+        if sym != "BTCUSDT":
+            raise ConnectionError("429")
+        return data[sym]
+    monkeypatch.setattr(pt, "_daily", flaky)
+    tick_env["run"]()
+    after = _state(tick_env)["universe"]
+    assert after["symbols"] == before["symbols"] and after["selected_at"] == "2020-01-31T00:00:00+00:00"
+
+
+def test_market_max_qty_caps_sell():
+    c = FakeClient({"USDT": 0.0, "ETH": 100.0}, {"ETHUSDT": 10.0})
+    rules = _rules(c)
+    from dataclasses import replace
+    rules["ETHUSDT"] = replace(rules["ETHUSDT"], max_qty=Decimal("30"))
+    rebalance_portfolio(c, {"ETHUSDT": 0.0}, {"ETHUSDT"}, rules)
+    assert c.bal["ETH"] == pytest.approx(70.0)   # 30 만 팔고 나머지는 다음 tick
+
+
+def test_mode_helper_matches_workflow_semantics():
+    import scripts.live_tick as lt
+    assert not lt.is_mainnet({}) and not lt.is_mainnet({"testnet": True})
+    assert lt.is_mainnet({"testnet": False}) and lt.is_mainnet({"testnet": 0})

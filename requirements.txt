@@ -6,3 +6,9 @@ python-binance==1.0.36
 pyyaml==6.0.3
 requests==2.34.2
 pytest==9.2.0
+# python-binance 하위 의존성 (러너에서 동작 확인된 버전으로 고정)
+aiohttp==3.13.5
+websockets==16.0
+pycryptodome==3.23.0
+dateparser==1.4.0
+python-dateutil==2.9.0.post0
