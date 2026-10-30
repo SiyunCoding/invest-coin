@@ -1,13 +1,13 @@
 """스모크 테스트 — 등록된 모든 전략이 BTC 데이터로 끝까지 도는지 확인.
 
-빠른 동작 점검용. 정량 검증은 scripts/validate_5y.py 사용.
+빠른 동작 점검용. 정량 검증은 research/validate_5y.py 사용.
 """
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.backtest import grid_search, run_backtest, run_multi_coin

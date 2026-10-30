@@ -3,10 +3,12 @@
 #         (live_trading.yaml 이 없으면 scripts/live_tick.py 의 DEFAULT_CONFIG = testnet 으로 동작)
 #
 # 전환 전 체크:
+#   0) README '보안 체크리스트' 완료 (저장소 Private 전환 등)
 #   1) Binance API 키: Reading + Spot Trading 만, Withdrawals 절대 OFF, IP 제한 = Oracle 서버 IP
+#      계정 설정에서 'BNB로 수수료 지불' OFF (BNB 보유 비중이 수수료로 깎이는 것 방지)
 #   2) GitHub Secrets: BINANCE_API_KEY / BINANCE_API_SECRET
 #   3) 계좌에 USDT 입금 (총자산 < $3,000 이면 BTC 단독 운용)
-#   4) 모드가 바뀌면 옛 testnet state 는 자동 백업되고 새로 시작됨
+#   4) 모드가 바뀌면 옛 testnet state 는 서버 ~/.invest-coin/backups/ 에 자동 백업되고 새로 시작됨
 
 testnet: false   # ⚠️ 실거래 — 진짜 돈
 

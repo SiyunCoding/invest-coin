@@ -1,7 +1,7 @@
 """트레이딩 상태 영속화 (JSON).
 
 live tick에서 매 사이클마다 호출. cash/qty/거래내역/히스토리를 dict로 보관.
-스키마 초기화는 호출자(src/live/tick.py)가 자체 책임.
+스키마 초기화는 호출자(src/live/portfolio_tick.py)가 자체 책임.
 """
 from __future__ import annotations
 

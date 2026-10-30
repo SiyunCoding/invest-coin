@@ -79,7 +79,7 @@ class ConnorsRSI(Strategy):
         rsi_close = wilder_rsi(close, self.rsi_period)
         udl = _up_down_length(close)
         rsi_udl = wilder_rsi(udl, self.updown_period)
-        roc = close.pct_change()
+        roc = close.pct_change(fill_method=None)
         pct_rank = _percent_rank(roc, self.pct_lookback)
         crsi = (rsi_close + rsi_udl + pct_rank) / 3.0
 

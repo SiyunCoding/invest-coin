@@ -5,7 +5,7 @@ name: Live Tick Watchdog
 # 30시간 넘게 tick 커밋이 없으면 Telegram 경보.
 on:
   schedule:
-    - cron: '0 12 * * *'   # 매일 UTC 12:00 (KST 21:00) — 평소 tick(UTC 05~06시) 이후
+    - cron: '0 12 * * *'   # 매일 UTC 12:00 (KST 21:00) — tick 예약 00:35, 스케줄 지연으로 실제 실행은 UTC 05~06시경
   workflow_dispatch:
 
 permissions:
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 50
 

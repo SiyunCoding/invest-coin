@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import html
 import json
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from ..utils.timefmt import kst_str
 
 
 def _fmt_money(x: float) -> str:
@@ -27,12 +28,12 @@ def _fmt_qty(x: float, decimals: int = 6) -> str:
 
 
 def _utc_to_kst_str(iso: str | None) -> str:
-    if not iso:
-        return "—"
-    dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone(timedelta(hours=9))).strftime("%Y-%m-%d %H:%M KST")
+    return kst_str(iso) if iso else "—"
+
+
+def _js(data) -> str:
+    """<script> 안에 넣을 JSON. '</script>' 조기 종료(XSS) 방지."""
+    return json.dumps(data).replace("</", "<\\/")
 
 
 def render_dashboard(state: dict, output_path: Path) -> None:
@@ -82,9 +83,9 @@ def render_dashboard(state: dict, output_path: Path) -> None:
 
 
 def _html(**ctx) -> str:
-    pie = json.dumps([{"label": h["symbol"].replace("USDT", ""), "value": h["value"]} for h in ctx["holdings"]]
-                     + [{"label": "현금", "value": ctx["cash"]}])
-    curve = json.dumps(ctx["curve"])
+    pie = _js([{"label": h["symbol"].replace("USDT", ""), "value": h["value"]} for h in ctx["holdings"]]
+              + [{"label": "현금", "value": ctx["cash"]}])
+    curve = _js(ctx["curve"])
     ret_class = "gain" if ctx["nav_return"] >= 0 else "loss"
     btc_class = "gain" if ctx["btc_return"] >= 0 else "loss"
 
@@ -107,8 +108,8 @@ def _html(**ctx) -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>코인 자동매매 대시보드</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js" integrity="sha384-FcQlsUOd0TJjROrBxhJdUhXTUgNJQxTMcxZe6nHbaEfFL1zjQ+bq/uRoBQxb0KMo" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" integrity="sha384-cVMg8E3QFwTvGCDuK+ET4PD341jF3W8nO1auiXfuZNQkzbUUiBGLsIQUE+b1mxws" crossorigin="anonymous"></script>
 <style>
   * {{ box-sizing: border-box; }}
   body {{ margin: 0; padding: 24px 16px; font-family: -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;

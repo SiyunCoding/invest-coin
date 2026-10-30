@@ -82,7 +82,7 @@
 - [ ] 7일 연속 무중단 자동 실행
 - [ ] 신호 변경 시 (0 → 양수) 매수 거래 발생 검증
 - [ ] state.json + dashboard.html 매일 자동 commit 정상
-- [ ] cycle_aware 신호가 백테스트와 동일하게 계산됨
+- [~] cycle_aware 신호가 백테스트와 동일하게 계산됨 (전략 교체로 대체 — Trend Rotation 은 백테스트·라이브 같은 함수)
 
 ## ✅ Phase 4.6 — 전략 교체: cycle_aware → Trend Rotation (2026-10-29)
 
@@ -110,6 +110,20 @@
 - [x] 비상정지 버그 수정: 러너 checkout 의 git clean 이 .halt 를 지워 작동 안 하던 문제 → ~/.invest-coin.halt 도 확인
 - [ ] mainnet 전 자본 규모 결정 ($3,000 미만이면 BTC 단독 운용) → config/live_trading.example.yaml 참고
 - [ ] (선택) mainnet 에서 유휴 USDT Simple Earn 연동 검토 (APR ~3.3%, 백테스트 Sharpe 1.14 → 1.26)
+
+## ✅ Phase 4.7 — 품질·보안 정비 (2026-10-30)
+
+- [x] 리뷰 4종 (실매매 정확성 / 보안 / 품질·구조 / 백테스트·데이터) 서브에이전트 + 수정 후 diff 교차검증
+- [x] 실매매: 주문 오류 시 state 커밋 누락(기록 소실·고아 포지션) 수정, 소액 수량 지수표기 거부 수정,
+      정지/미체결 시 진입 누락 수정, 월말 tick 누락 시 재선정 지연 수정, NAV 수수료 반영, 끊긴 데이터 종목 제외,
+      주문 후 단계 실패 시 state 저장+재동기화, 네트워크 재시도, 먼지 정리, 소액 경계 히스테리시스
+- [x] 보안: 워크플로우 쓰기 토큰 최소화, mainnet 키는 mainnet 모드에서만 전달, action SHA 고정, 의존성 버전 고정 +
+      매 실행 새 venv, 동시 실행 방지, 텔레그램 토큰 로그 마스킹, 대시보드 XSS/SRI, .gitignore 강화, Dependabot
+- [x] 정리: 선물 스캘퍼 코드·튜닝 스크립트 삭제, 연구 스크립트 research/ 이동, 신호 함수를 src/portfolio/signals.py 로
+      분리(라이브가 연구 전략 REGISTRY 에 의존하지 않음), executor 통합, 중복 제거, 미사용 의존성 제거
+- [x] 백테스트: 거래 추출 한 봉 밀림, 최적화 MDD 정렬 반대, 짧은 기간 CAGR 폭주, 공백일 수익 누락 수정
+- [x] 테스트 25 → 47개, README 재작성
+- [ ] **(소유자)** README 보안 체크리스트: 저장소 Private 전환, Actions 설정, mainnet 키 정리
 
 ## 🔮 Phase 5 — 실거래 (Phase 4 통과 후)
 - [ ] Binance API 키 인증 + 테스트넷 우선

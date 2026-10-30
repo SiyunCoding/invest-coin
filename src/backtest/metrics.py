@@ -29,7 +29,9 @@ def cagr(equity: pd.Series) -> float:
     if len(equity) < 2:
         return 0.0
     start, end = equity.index[0], equity.index[-1]
-    years = max((end - start).total_seconds() / (365 * 24 * 3600), 1e-9)
+    years = (end - start).total_seconds() / (365 * 24 * 3600)
+    if years < 30 / 365:  # 한 달 미만은 연환산이 무의미하게 폭주 → NaN
+        return float("nan")
     return float((equity.iloc[-1] / equity.iloc[0]) ** (1 / years) - 1)
 
 

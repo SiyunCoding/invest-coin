@@ -14,10 +14,10 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 import requests
+
+from ..utils.timefmt import kst_str
 
 TELEGRAM_API = "https://api.telegram.org"
 
@@ -74,15 +74,9 @@ def send_telegram_message(text: str, parse_mode: str = "Markdown") -> bool:
         print(f"[telegram] send failed: HTTP {resp.status_code} {err}")
         return False
     except Exception as e:
-        print(f"[telegram] send failed (network): {e}")
+        # requests 예외 메시지에는 요청 URL(= 봇 토큰 포함)이 들어감 → 토큰 가림
+        print(f"[telegram] send failed (network): {str(e).replace(token, '***')}")
         return False
-
-
-def _kst_str(dt: Optional[datetime] = None) -> str:
-    if dt is None:
-        dt = datetime.now(timezone.utc)
-    kst = dt.astimezone(timezone(timedelta(hours=9)))
-    return kst.strftime("%Y-%m-%d %H:%M KST")
 
 
 
@@ -93,7 +87,7 @@ def format_portfolio_notification(result: dict) -> str:
     매 tick 헬스체크 역할 — 총자산/노출/종목별 비중을 항상 표시, 체결·정지·오류는 강조.
     """
     mode_label = {"testnet": "📊 실투자 (테스트넷)", "mainnet": "🔥 실거래"}.get(result.get("mode"), "📊 테스트넷")
-    lines = [f"{mode_label} · {_kst_str()}"]
+    lines = [f"{mode_label} · {kst_str()}"]
 
     if result.get("halted") or result.get("buy_blocked"):
         title = "🛑 *매매 정지*" if result.get("halted") else "⚠️ *매수 중지 (매도만 허용)*"

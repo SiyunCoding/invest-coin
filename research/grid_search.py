@@ -223,7 +223,7 @@ def main() -> int:
 
     tuned = step1_grid_search_all(btc)
     wf = step2_walk_forward(btc)
-    final = step3_final_comparison(tuned)
+    step3_final_comparison(tuned)
 
     print("\n\n" + "#" * 90)
     print("# 최종 튜닝된 파라미터 (BTC 3년 in-sample 기준)")

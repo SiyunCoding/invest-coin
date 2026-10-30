@@ -1,45 +1,77 @@
 name: Live Trading Daily Tick
 
-# 매일 UTC 00:35 (= KST 09:35). 어제 마감 봉 기준으로 Trend Rotation 목표 비중 계산.
+# 매일 UTC 00:35 (= KST 09:35) 예약. GitHub 스케줄 지연으로 실제 실행은 UTC 05~06시경.
+# 어제 마감 봉 기준 Trend Rotation 목표 비중 계산 → Binance 현물 주문.
 # Binance가 GHA 호스팅 러너 IP를 차단해서 self-hosted runner (Oracle Cloud 춘천) 사용.
-# Runner: invest-coin-runner @ Oracle Cloud ap-chuncheon-1
-# config/live_trading.yaml의 testnet 플래그가 testnet/mainnet 결정.
+# config/live_trading.yaml 의 testnet 플래그가 testnet/mainnet 결정 (없으면 testnet).
+#
+# 보안:
+#  - 트리거는 schedule / workflow_dispatch 뿐 (PR 코드가 이 러너에서 돌지 않게)
+#  - GITHUB_TOKEN 쓰기 권한은 마지막 commit step 에서만 사용 (checkout 이 디스크에 저장하지 않음)
+#  - mainnet 키는 mainnet 모드일 때만 프로세스에 전달
+#  - 외부 action 은 커밋 SHA 고정, 패키지는 requirements.txt 버전 고정 + 매 실행 새 venv
 on:
   schedule:
     - cron: '35 0 * * *'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: live-tick
+  cancel-in-progress: false
 
 jobs:
   tick:
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 10
+    timeout-minutes: 20
+    permissions:
+      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
 
-      - name: Install dependencies
+      - name: Sync to latest main (대기 중 쌓인 tick 커밋 반영)
+        run: git pull --ff-only origin main
+
+      - name: Install dependencies (fresh venv)
         run: |
-          python3.11 -m pip install --user --upgrade pip
-          python3.11 -m pip install --user -r requirements.txt
+          python3.11 -m venv .venv
+          .venv/bin/python -m pip install --quiet --upgrade pip
+          .venv/bin/python -m pip install --quiet -r requirements.txt
+
+      - name: Detect mode
+        id: mode
+        run: |
+          .venv/bin/python - >> "$GITHUB_OUTPUT" <<'EOF'
+          import pathlib, yaml
+          p = pathlib.Path("config/live_trading.yaml")
+          cfg = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+          print("mainnet=" + ("true" if cfg.get("testnet", True) is False else "false"))
+          EOF
 
       - name: Run tests (실패 시 매매 안 함)
-        run: python3.11 -m pytest -q tests -p no:warnings
+        run: .venv/bin/python -m pytest -q -p no:warnings
 
       - name: Run live trading tick
+        id: tick
         env:
-          # testnet 키와 mainnet 키 둘 다 전달 — config의 testnet 플래그가 어느 쪽 쓸지 결정
-          BINANCE_TESTNET_API_KEY: ${{ secrets.BINANCE_TESTNET_API_KEY }}
-          BINANCE_TESTNET_API_SECRET: ${{ secrets.BINANCE_TESTNET_API_SECRET }}
-          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
-          BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
+          BINANCE_TESTNET_API_KEY: ${{ steps.mode.outputs.mainnet != 'true' && secrets.BINANCE_TESTNET_API_KEY || '' }}
+          BINANCE_TESTNET_API_SECRET: ${{ steps.mode.outputs.mainnet != 'true' && secrets.BINANCE_TESTNET_API_SECRET || '' }}
+          BINANCE_API_KEY: ${{ steps.mode.outputs.mainnet == 'true' && secrets.BINANCE_API_KEY || '' }}
+          BINANCE_API_SECRET: ${{ steps.mode.outputs.mainnet == 'true' && secrets.BINANCE_API_SECRET || '' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python3.11 -X utf8 scripts/live_tick.py
+        run: .venv/bin/python -X utf8 scripts/live_tick.py
 
+      # tick 이 중간에 실패해도 저장된 state(체결 기록)는 반드시 커밋 — 안 하면 다음 실행이 옛 state 로 덮어씀
       - name: Commit state + dashboard
+        if: always() && steps.tick.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -49,9 +81,10 @@ jobs:
             exit 0
           fi
           git commit -m "live tick $(date -u +%Y-%m-%dT%H:%MZ)"
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           # main이 앞서 갔을 수 있으니 rebase + push 재시도 (race condition 대응)
           for attempt in 1 2 3; do
-            git pull --rebase origin main && git push && exit 0
+            git pull --rebase "$remote" main && git push "$remote" HEAD:main && exit 0
             echo "Push attempt $attempt failed, retrying after 5s..."
             sleep 5
           done
@@ -68,4 +101,4 @@ jobs:
           [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-            --data-urlencode "text=🚨 매매 워크플로우 실패 (테스트/주문/커밋 중 하나). 로그: ${RUN_URL}" > /dev/null
+            --data-urlencode "text=🚨 매매 워크플로우 실패 (테스트/데이터/주문/커밋 중 하나). 로그: ${RUN_URL}" > /dev/null

@@ -1,9 +1,9 @@
 """바이낸스에 상장됐던 모든 USDT 현물 페어 일봉 수집 (상장폐지 포함) → data/all/.
 
-생존편향 없는 백테스트(scripts/backtest_trend_rotation.py)용.
+생존편향 없는 백테스트(research/backtest_trend_rotation.py)용.
 심볼 목록: data.binance.vision S3 (과거 전체), 데이터: /api/v3/klines, 없으면 S3 월별 zip.
 
-실행: python -X utf8 scripts/fetch_all_pairs.py   (최초 ~15분, 이후엔 받은 파일 건너뜀)
+실행: python -X utf8 research/fetch_all_pairs.py   (최초 ~15분, 이후엔 받은 파일 건너뜀)
 """
 from __future__ import annotations
 

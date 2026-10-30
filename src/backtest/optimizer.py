@@ -74,7 +74,7 @@ def grid_search(
     if metric not in df.columns:
         raise ValueError(f"metric '{metric}' not in results")
 
-    ascending = metric == "max_drawdown"  # MDD는 0에 가까울수록 좋음 → 내림차순(덜 음수)
+    ascending = False  # 모든 지표가 클수록 좋음 (MDD 는 음수라 0 에 가까운 = 큰 값이 좋음)
     sorted_df = df.sort_values(metric, ascending=ascending, na_position="last").reset_index(drop=True)
     best_row = sorted_df.iloc[0].to_dict()
     best_params = {k: best_row[k] for k in grid.keys()}
