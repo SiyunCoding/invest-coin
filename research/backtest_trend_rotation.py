@@ -1,12 +1,12 @@
 """Trend Rotation 생존편향 없는 백테스트 — 라이브와 같은 함수로 재현.
 
 src.portfolio 의 select_universe / should_drop / weights_from_signals / apply_band 를
-날짜별로 그대로 호출한다. 데이터는 scripts/fetch_all_pairs.py 로 받은 data/all/ (상장폐지 포함).
+날짜별로 그대로 호출한다. 데이터는 research/fetch_all_pairs.py 로 받은 data/all/ (상장폐지 포함).
 
 비용: 편도 fee+slippage (기본 0.15%). 체결은 마감 봉 다음 날 수익률에 반영 (lookahead 없음).
 기간: 설계 2018-09~2022 / 검증 2023~2024-10 / 홀드아웃 2024-11~
 
-실행: python -X utf8 scripts/backtest_trend_rotation.py [--cash-apr 0.03] [--cost 0.0015]
+실행: python -X utf8 research/backtest_trend_rotation.py [--cash-apr 0.03] [--cost 0.0015]
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 from src.portfolio import (  # noqa: E402
     TrendRotationConfig, apply_band, select_universe, should_drop, weights_from_signals,
 )
-from src.strategies.donchian_ensemble import trend_fraction, vol_scale  # noqa: E402
+from src.portfolio.signals import trend_fraction, vol_scale  # noqa: E402
 
 DATA = ROOT / "data" / "all"
 # 데이터 점검으로 확인한 토큰 액면변경/심볼 재사용 날짜 → 이 날부터 별도 종목 취급 (가짜 수익률 방지)
@@ -54,7 +54,8 @@ def load_segments() -> dict[str, pd.DataFrame]:
 def run(cfg: TrendRotationConfig, cost: float, cash_apr: float, start="2018-09-01"):
     segs = load_segments()
     closes = pd.DataFrame({s: d["close"] for s, d in segs.items()}).sort_index()
-    rets = closes.pct_change(fill_method=None)
+    # 세그먼트별로 수익률 계산 → 결측일(거래 공백) 다음 날에 그 사이 가격 변화가 온전히 반영됨
+    rets = pd.DataFrame({s: d["close"].pct_change(fill_method=None) for s, d in segs.items()}).reindex(closes.index)
     frac = {s: trend_fraction(d["close"], cfg.lookbacks) for s, d in segs.items()}
     size_alt = {s: vol_scale(d["close"], cfg.alt_target_vol, cfg.vol_window) for s, d in segs.items()}
     btc = segs[cfg.btc_symbol]["close"]
@@ -88,7 +89,7 @@ def run(cfg: TrendRotationConfig, cost: float, cash_apr: float, start="2018-09-0
         expo = sum(new.values())
         net = gross - turnover * cost + max(1.0 - expo, 0.0) * cash_apr / 365
         # 다음 날 시작 비중 = 가격 변동으로 드리프트
-        growth = 1.0 + gross
+        growth = 1.0 + net  # 비용/현금이자까지 반영한 총자산 변화로 다음 날 비중 정규화
         held = {s: w * (1 + r[s]) / growth for s, w in new.items()} if growth > 0 else {}
         rows.append((nxt, net, expo, turnover, len(live)))
     res = pd.DataFrame(rows, columns=["date", "net", "expo", "turnover", "n_live"]).set_index("date")
@@ -111,7 +112,7 @@ def main() -> int:
     ap.add_argument("--cash-apr", type=float, default=0.0)
     args = ap.parse_args()
     if not DATA.exists():
-        print("data/all/ 없음 — 먼저 python -X utf8 scripts/fetch_all_pairs.py")
+        print("data/all/ 없음 — 먼저 python -X utf8 research/fetch_all_pairs.py")
         return 1
     cfg = TrendRotationConfig()
     res = run(cfg, args.cost, args.cash_apr)

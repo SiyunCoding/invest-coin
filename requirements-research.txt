@@ -1,0 +1,4 @@
+# 연구/백테스트 UI 용 (실매매 러너에는 설치 안 함)
+-r requirements.txt
+streamlit>=1.31.0
+plotly>=5.18.0

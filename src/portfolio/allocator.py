@@ -6,7 +6,7 @@
     각 종목 Donchian 앙상블 × min(alt_target_vol/σ90, 1)   (BTC 가 유니버스에 들면 BTC 비중에 합산)
   - 리밸런스: 추세 신호(frac) 변화 → 즉시. 변동성 때문만의 변화 → 슬롯 대비 rebalance_threshold 초과 시.
 
-백테스트(scripts/backtest_trend_rotation.py)와 라이브(src/live/portfolio_tick.py)가 같은 함수를 쓴다.
+백테스트(research/backtest_trend_rotation.py)와 라이브(src/live/portfolio_tick.py)가 같은 함수를 쓴다.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
-from ..strategies.donchian_ensemble import DEFAULT_LOOKBACKS, trend_fraction, vol_scale
+from .signals import DEFAULT_LOOKBACKS, trend_fraction, vol_scale
 
 
 @dataclass

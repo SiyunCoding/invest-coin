@@ -191,11 +191,8 @@ REGISTRY: dict[str, StrategyMeta] = {
     ),
 }
 
-# 호환 유지용 별칭
-STRATEGIES: dict[str, type[Strategy]] = {k: v.cls for k, v in REGISTRY.items()}
-
 __all__ = [
-    "Strategy", "Signal", "ParamSpec", "StrategyMeta", "REGISTRY", "STRATEGIES",
+    "Strategy", "Signal", "ParamSpec", "StrategyMeta", "REGISTRY",
     "VolatilityBreakout", "MACross", "RSIStrategy", "ConnorsRSI", "DonchianATR",
     "VolTargetedTSMOM", "LarryATR", "WeightedEnsemble", "CycleAwareEnsemble", "DonchianEnsemble",
 ]

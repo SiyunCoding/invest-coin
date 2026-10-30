@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-import numpy as np
 import pandas as pd
 
 from ..strategies.base import Strategy
@@ -32,45 +31,43 @@ class BacktestResult:
 def _extract_trades(
     ohlcv: pd.DataFrame, position: pd.Series, equity: pd.Series
 ) -> pd.DataFrame:
-    """포지션 변화점에서 진입/청산 가격을 추출해 거래 단위로 묶는다."""
+    """포지션 변화점에서 거래 단위로 묶는다.
+
+    position[i] = signal[i-1] 이므로 position 이 처음 > 0 이 된 봉 i 는 i-1 종가에 진입한 것,
+    position 이 0 이 된 봉 j 는 j-1 종가에 청산한 것. 청산 비용은 j 봉 수익률에 반영돼 있어
+    순수익률은 equity[j] / equity[i-1] 로 계산한다.
+    """
     pos = position.fillna(0.0).to_numpy()
     closes = ohlcv["close"].to_numpy()
     times = ohlcv.index
-    equity_arr = equity.to_numpy()
+    eq = equity.to_numpy()
+
+    def _trade(entry_i: int, exit_i: int, open_: bool) -> dict:
+        e, x = entry_i - 1, (exit_i - 1 if not open_ else exit_i)
+        base = eq[e] if e >= 0 else eq[0]
+        row = {
+            "entry_time": times[e],
+            "exit_time": times[x],
+            "entry_price": float(closes[e]),
+            "exit_price": float(closes[x]),
+            "gross_return": float(closes[x] / closes[e] - 1),
+            "net_return": float(eq[exit_i] / base - 1),
+        }
+        if open_:
+            row["open"] = True
+        return row
 
     trades = []
     in_pos = False
     entry_i = -1
     for i in range(len(pos)):
         if not in_pos and pos[i] > 0:
-            in_pos = True
-            entry_i = i
+            in_pos, entry_i = True, i
         elif in_pos and pos[i] == 0:
-            exit_i = i
-            ret = closes[exit_i] / closes[entry_i] - 1
-            equity_ret = equity_arr[exit_i] / equity_arr[entry_i] - 1
-            trades.append({
-                "entry_time": times[entry_i],
-                "exit_time": times[exit_i],
-                "entry_price": float(closes[entry_i]),
-                "exit_price": float(closes[exit_i]),
-                "gross_return": float(ret),
-                "net_return": float(equity_ret),
-            })
+            trades.append(_trade(entry_i, i, open_=False))
             in_pos = False
     if in_pos:
-        exit_i = len(pos) - 1
-        ret = closes[exit_i] / closes[entry_i] - 1
-        equity_ret = equity_arr[exit_i] / equity_arr[entry_i] - 1
-        trades.append({
-            "entry_time": times[entry_i],
-            "exit_time": times[exit_i],
-            "entry_price": float(closes[entry_i]),
-            "exit_price": float(closes[exit_i]),
-            "gross_return": float(ret),
-            "net_return": float(equity_ret),
-            "open": True,
-        })
+        trades.append(_trade(entry_i, len(pos) - 1, open_=True))
     return pd.DataFrame(trades)
 
 
@@ -90,7 +87,7 @@ def run_backtest(
     position = signal.shift(1).fillna(0.0)
 
     close = ohlcv["close"]
-    bar_returns = close.pct_change().fillna(0.0)
+    bar_returns = close.pct_change(fill_method=None).fillna(0.0)
     gross_returns = position * bar_returns
 
     # 포지션 변화 시 거래비용 차감 (왕복 한쪽씩 적용)

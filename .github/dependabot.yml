@@ -1,0 +1,12 @@
+# 의존성/액션 보안 업데이트 알림 (PR 로 제안 — 자동 머지 안 함, 테스트 통과 확인 후 머지)
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5

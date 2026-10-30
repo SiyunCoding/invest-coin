@@ -11,6 +11,8 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+from ..utils.symbols import split_symbol
+
 BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 CRYPTOCOMPARE_URL = "https://min-api.cryptocompare.com/data/v2"
 MAX_LIMIT = 1000
@@ -80,14 +82,6 @@ def _request_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> l
     return resp.json()
 
 
-def _split_symbol(symbol: str) -> tuple[str, str]:
-    """BTCUSDT → ('BTC', 'USDT'). CryptoCompare용 분리."""
-    for quote in ("USDT", "USDC", "BUSD", "USD", "BTC", "ETH"):
-        if symbol.endswith(quote):
-            return symbol[:-len(quote)], quote
-    raise ValueError(f"Cannot split symbol: {symbol}")
-
-
 def _fetch_cryptocompare(symbol: str, interval: str, start_ms: int, end_ms: int) -> list:
     """CryptoCompare에서 OHLCV 가져와 Binance kline 포맷으로 변환.
 
@@ -96,7 +90,7 @@ def _fetch_cryptocompare(symbol: str, interval: str, start_ms: int, end_ms: int)
     """
     if interval not in CC_INTERVAL_ENDPOINT:
         raise ValueError(f"CryptoCompare fallback only supports {list(CC_INTERVAL_ENDPOINT)}")
-    fsym, tsym = _split_symbol(symbol)
+    fsym, tsym = split_symbol(symbol)
     url = f"{CRYPTOCOMPARE_URL}/{CC_INTERVAL_ENDPOINT[interval]}"
     step_ms = INTERVAL_TO_MS[interval]
     step_s = step_ms // 1000
@@ -143,10 +137,13 @@ def fetch_ohlcv(
     start: datetime | None = None,
     end: datetime | None = None,
     lookback_days: int | None = None,
+    allow_fallback: bool = True,
 ) -> pd.DataFrame:
     """바이낸스에서 OHLCV 캔들을 받아 DataFrame으로 반환.
 
     start/end가 주어지면 그 구간을, 아니면 lookback_days만큼 과거를 가져온다.
+    allow_fallback=False 면 HTTP 451(geo-block)에서 CryptoCompare 로 넘어가지 않고 예외
+    (라이브용: CryptoCompare 거래대금은 거래소 합산 값이라 유니버스 기준과 단위가 다름).
     """
     if interval not in INTERVAL_TO_MS:
         raise ValueError(f"Unsupported interval: {interval}")
@@ -170,8 +167,9 @@ def fetch_ohlcv(
             batch = _request_klines(symbol, interval, cursor, end_ms)
         except requests.HTTPError as e:
             # Binance 451 = geo-block (예: GitHub Actions US 러너). CryptoCompare로 폴백.
-            if e.response is not None and e.response.status_code == 451 and not used_fallback:
-                all_rows = _fetch_cryptocompare(symbol, interval, cursor, end_ms)
+            if (allow_fallback and e.response is not None
+                    and e.response.status_code == 451 and not used_fallback):
+                all_rows.extend(_fetch_cryptocompare(symbol, interval, cursor, end_ms))
                 used_fallback = True
                 break
             raise
@@ -216,6 +214,7 @@ def load_ohlcv(
     lookback_days: int = 365,
     cache_dir: str | Path = "data",
     refresh: bool = False,
+    allow_fallback: bool = True,
 ) -> pd.DataFrame:
     """캐시가 있으면 읽어오고 최신 부분만 보강, 없으면 전체 수집."""
     cache_dir = Path(cache_dir)
@@ -233,7 +232,8 @@ def load_ohlcv(
 
             # 요청 구간이 캐시보다 더 과거까지면 옛날 부분 보강
             if first_time > start_ts + step:
-                older = fetch_ohlcv(symbol, interval, start=start, end=first_time.to_pydatetime() - step)
+                older = fetch_ohlcv(symbol, interval, start=start, end=first_time.to_pydatetime() - step,
+                                    allow_fallback=allow_fallback)
                 if not older.empty:
                     cached = pd.concat([older, cached])
                     cached = cached[~cached.index.duplicated(keep="last")].sort_index()
@@ -242,7 +242,8 @@ def load_ohlcv(
             last_closed_ms = _last_closed_open_ms(end, interval)
             last_closed_open = pd.Timestamp(last_closed_ms, unit="ms", tz="UTC")
             if last_time < last_closed_open:
-                new_part = fetch_ohlcv(symbol, interval, start=last_time + step, end=end)
+                new_part = fetch_ohlcv(symbol, interval, start=last_time + step, end=end,
+                                       allow_fallback=allow_fallback)
                 if not new_part.empty:
                     cached = pd.concat([cached, new_part])
                     cached = cached[~cached.index.duplicated(keep="last")].sort_index()
@@ -250,7 +251,7 @@ def load_ohlcv(
             cached.to_parquet(path)
             return cached.loc[cached.index >= start_ts]
 
-    df = fetch_ohlcv(symbol, interval, start=start, end=end)
+    df = fetch_ohlcv(symbol, interval, start=start, end=end, allow_fallback=allow_fallback)
     if not df.empty:
         df.to_parquet(path)
     return df

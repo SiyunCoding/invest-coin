@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -50,16 +51,22 @@ def _load_config() -> dict:
     return config
 
 
+def is_mainnet(config: dict) -> bool:
+    """실거래 여부 (워크플로우가 mainnet 키 전달 여부를 정할 때도 이 함수를 씀)."""
+    return not bool(config.get("testnet", True))
+
+
 def main() -> int:
     config = _load_config()
     state_path = ROOT / "data" / "live_state.json"
     dashboard_path = ROOT / "docs" / "live_dashboard.html"
-    cache_dir = ROOT / "data"
+    # 러너 작업 폴더는 매 실행 git clean 되므로 캐시/백업은 홈 아래에 (재다운로드·백업 소실 방지)
+    home = Path(os.environ.get("INVEST_COIN_HOME", Path.home() / ".invest-coin"))
 
-    mode = "testnet" if config.get("testnet", True) else "MAINNET"
+    mode = "MAINNET" if is_mainnet(config) else "testnet"
     print(f"[live/{mode}] tick start — strategy={config['strategy']}")
-    result = run_portfolio_tick(state_path=state_path, dashboard_path=dashboard_path,
-                                config=config, cache_dir=cache_dir)
+    result = run_portfolio_tick(state_path=state_path, dashboard_path=dashboard_path, config=config,
+                                cache_dir=home / "cache", root_dir=ROOT, backup_dir=home / "backups")
 
     print(f"[live/{mode}] bar={result['bar_time']} equity=${result['equity']:,.2f} "
           f"exposure={result['exposure']*100:.1f}% nav={result['nav']:.4f}")
@@ -74,11 +81,13 @@ def main() -> int:
                   f"(${t['value']:,.2f})")
     if result["reasons"]:
         print(f"[live/{mode}] SAFETY: {result['reasons']}")
+    if result["fetch_failed"]:
+        print(f"[live/{mode}] data fetch failed (보유 유지): {result['fetch_failed']}")
     if result["external_flow"]:
         print(f"[live/{mode}] external flow detected ${result['external_flow']:+,.2f}")
     print(f"[live/{mode}] dashboard → {dashboard_path.relative_to(ROOT)}")
-    errors = [t for t in result["trades"] if t.get("side") == "error"]
-    return 1 if errors else 0
+    # 주문 오류는 Telegram 으로 알리고 0 반환 — 실패로 끝내면 워크플로우가 state 커밋을 건너뛰어 기록이 소실됨
+    return 0
 
 
 if __name__ == "__main__":

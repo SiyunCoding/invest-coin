@@ -44,7 +44,7 @@ def median_volume(quote_volume: pd.Series, window: int = 30) -> float:
 
 
 def median_abs_move(close: pd.Series, window: int = 30) -> float:
-    tail = close.dropna().pct_change().abs().iloc[-window:]
+    tail = close.dropna().pct_change(fill_method=None).abs().iloc[-window:]
     return float(tail.median()) if len(tail) >= min(20, window) else 0.0
 
 
@@ -60,7 +60,7 @@ def select_universe(
     """
     ranked = []
     for sym, df in daily.items():
-        if df.empty or not is_eligible_symbol(sym):
+        if df.empty or not is_eligible_symbol(sym.split("#")[0]):  # "#2" = 백테스트의 분리 세그먼트
             continue
         listed_days = (df.index[-1] - df.index[0]).days
         if listed_days < min_listing_days:
