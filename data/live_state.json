@@ -16,16 +16,16 @@
   "started_at": "2026-10-29T14:11:11.206215+00:00",
   "initial_equity": 93007.5711893,
   "start_btc_price": 80272.57,
-  "nav": 0.990090088999922,
+  "nav": 0.9915123669875656,
   "peak_nav": 1.0,
   "external_flows": 0.0,
   "holdings": {
+    "ETHUSDT": 0.2449,
     "BNBUSDT": 1.538,
-    "NEARUSDT": 308.3,
+    "SOLUSDT": 5.6,
     "ZECUSDT": 0.807,
     "UNIUSDT": 135.07,
-    "SOLUSDT": 5.6,
-    "ETHUSDT": 0.2449,
+    "NEARUSDT": 308.3,
     "BTCUSDT": 0.15404
   },
   "cash": 81542.0190786,
@@ -54,7 +54,7 @@
       "DOGEUSDT",
       "UNIUSDT"
     ],
-    "selected_at": "2026-10-28T00:00:00+00:00"
+    "selected_at": "2026-10-31T00:00:00+00:00"
   },
   "trades": [
     {
@@ -358,10 +358,29 @@
         "ETHUSDT": 0.0056,
         "BTCUSDT": 0.1203
       }
+    },
+    {
+      "time": "2026-11-01T06:44:40.810159+00:00",
+      "bar_time": "2026-10-31T00:00:00+00:00",
+      "equity": 99060.491756,
+      "cash": 81542.0190786,
+      "exposure": 0.17684621151034133,
+      "nav": 0.9915123669875656,
+      "external_flow": 0.0,
+      "btc_price": 77928.51,
+      "weights": {
+        "ETHUSDT": 0.0056,
+        "BNBUSDT": 0.011,
+        "SOLUSDT": 0.0054,
+        "ZECUSDT": 0.0101,
+        "UNIUSDT": 0.0099,
+        "NEARUSDT": 0.0136,
+        "BTCUSDT": 0.1212
+      }
     }
   ],
-  "last_tick": "2026-10-31T06:12:34.021589+00:00",
-  "last_bar_time": "2026-10-30T00:00:00+00:00",
+  "last_tick": "2026-11-01T06:44:40.810159+00:00",
+  "last_bar_time": "2026-10-31T00:00:00+00:00",
   "targets": {
     "BTCUSDT": 0.1222,
     "ETHUSDT": 0.0056,
