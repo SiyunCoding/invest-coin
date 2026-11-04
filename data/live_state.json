@@ -16,29 +16,30 @@
   "started_at": "2026-10-29T14:11:11.206215+00:00",
   "initial_equity": 93007.5711893,
   "start_btc_price": 80272.57,
-  "nav": 0.9857095464689243,
+  "nav": 0.9904741512223727,
   "peak_nav": 1.0,
   "external_flows": 0.0,
   "holdings": {
-    "ETHUSDT": 0.2449,
     "ZECUSDT": 0.807,
-    "BTCUSDT": 0.15404,
     "NEARUSDT": 308.3,
+    "BTCUSDT": 0.15404,
+    "XRPUSDT": 365.1,
     "BNBUSDT": 1.538,
-    "UNIUSDT": 135.07
+    "ETHUSDT": 0.2449,
+    "UNIUSDT": 166.39
   },
-  "cash": 82055.9870786,
+  "cash": 81358.8579686,
   "prev_fracs": {
     "BTCUSDT": 0.2222222222222222,
     "ETHUSDT": 0.1111111111111111,
     "SOLUSDT": 0.0,
     "ZECUSDT": 0.4444444444444444,
     "NEARUSDT": 0.4444444444444444,
-    "XRPUSDT": 0.0,
+    "XRPUSDT": 0.1111111111111111,
     "BNBUSDT": 0.2222222222222222,
     "SUIUSDT": 0.0,
     "DOGEUSDT": 0.0,
-    "UNIUSDT": 0.3333333333333333
+    "UNIUSDT": 0.4444444444444444
   },
   "universe": {
     "symbols": [
@@ -289,6 +290,32 @@
       "order_id": 1758194,
       "status": "FILLED",
       "bar_time": "2026-11-02T00:00:00+00:00"
+    },
+    {
+      "time": "2026-11-04T06:56:41.695000+00:00",
+      "side": "buy",
+      "symbol": "XRPUSDT",
+      "qty": 365.1,
+      "price": 1.2765,
+      "value": 466.05015000000003,
+      "fee": 0.0,
+      "fee_asset": "XRP",
+      "order_id": 1507223,
+      "status": "FILLED",
+      "bar_time": "2026-11-03T00:00:00+00:00"
+    },
+    {
+      "time": "2026-11-04T06:56:41.780000+00:00",
+      "side": "buy",
+      "symbol": "UNIUSDT",
+      "qty": 31.32,
+      "price": 7.378,
+      "value": 231.07896,
+      "fee": 0.0,
+      "fee_asset": "UNI",
+      "order_id": 1677408,
+      "status": "FILLED",
+      "bar_time": "2026-11-03T00:00:00+00:00"
     }
   ],
   "history": [
@@ -426,21 +453,40 @@
         "BNBUSDT": 0.0108,
         "UNIUSDT": 0.0096
       }
+    },
+    {
+      "time": "2026-11-04T06:56:38.266198+00:00",
+      "bar_time": "2026-11-03T00:00:00+00:00",
+      "equity": 98956.7651988,
+      "cash": 81358.8579686,
+      "exposure": 0.17783430162502323,
+      "nav": 0.9904741512223727,
+      "external_flow": 0.0,
+      "btc_price": 78034.98,
+      "weights": {
+        "ZECUSDT": 0.0104,
+        "NEARUSDT": 0.0123,
+        "BTCUSDT": 0.1215,
+        "XRPUSDT": 0.0047,
+        "BNBUSDT": 0.0109,
+        "ETHUSDT": 0.0057,
+        "UNIUSDT": 0.0124
+      }
     }
   ],
-  "last_tick": "2026-11-03T07:11:09.437966+00:00",
-  "last_bar_time": "2026-11-02T00:00:00+00:00",
+  "last_tick": "2026-11-04T06:56:38.266198+00:00",
+  "last_bar_time": "2026-11-03T00:00:00+00:00",
   "targets": {
     "BTCUSDT": 0.1222,
     "ETHUSDT": 0.0056,
     "SOLUSDT": 0.0,
     "ZECUSDT": 0.0103,
     "NEARUSDT": 0.0105,
-    "XRPUSDT": 0.0,
+    "XRPUSDT": 0.0047,
     "BNBUSDT": 0.0111,
     "SUIUSDT": 0.0,
     "DOGEUSDT": 0.0,
-    "UNIUSDT": 0.0093
+    "UNIUSDT": 0.0124
   },
   "fracs": {
     "BTCUSDT": 0.222,
@@ -448,11 +494,11 @@
     "SOLUSDT": 0.0,
     "ZECUSDT": 0.444,
     "NEARUSDT": 0.444,
-    "XRPUSDT": 0.0,
+    "XRPUSDT": 0.111,
     "BNBUSDT": 0.222,
     "SUIUSDT": 0.0,
     "DOGEUSDT": 0.0,
-    "UNIUSDT": 0.333
+    "UNIUSDT": 0.444
   },
   "alts_enabled": true,
   "resync": false
